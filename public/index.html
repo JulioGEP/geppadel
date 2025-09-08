@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GEP&Padel — Tablero</title>
+  <meta name="theme-color" content="#111111" />
+  <link rel="manifest" href="./manifest.webmanifest">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-neutral-50">
+  <div id="root" class="max-w-6xl mx-auto p-4"></div>
+  <script>
+    const API = {
+      get base(){ return localStorage.getItem('gep_api_base') || ''; },
+      set base(v){ localStorage.setItem('gep_api_base', v || ''); },
+      get key(){ return localStorage.getItem('gep_api_key') || ''; },
+      set key(v){ localStorage.setItem('gep_api_key', v || ''); },
+      headers(){ const h={'content-type':'application/json'}; const k=this.key; if(k) h['x-api-key']=k; return h; },
+      url(p){ return (this.base.replace(/\/$/,''))+p; },
+      async get(p){ const r=await fetch(this.url(p),{headers:this.headers()}); if(!r.ok) throw new Error(await r.text()); return r.json(); },
+      async post(p,b){ const r=await fetch(this.url(p),{method:'POST',headers:this.headers(),body:JSON.stringify(b||{})}); if(!r.ok) throw new Error(await r.text()); return r.json(); },
+      async put(p,b){ const r=await fetch(this.url(p),{method:'PUT',headers:this.headers(),body:JSON.stringify(b||{})}); if(!r.ok) throw new Error(await r.text()); return r.json(); },
+    };
+    const $=s=>document.querySelector(s);
+    const T=html=>{const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild;};
+
+    async function loadAll(){
+      const [players,matches,standings]=await Promise.all([
+        API.get('/.netlify/functions/list-players'),
+        API.get('/.netlify/functions/list-matches'),
+        API.get('/.netlify/functions/standings'),
+      ]);
+      return {players,matches,standings};
+    }
+
+    function draw({players,matches,standings}){
+      const canEdit=!!API.key;
+      const root=$("#root"); root.innerHTML="";
+
+      const head=T(`
+        <header class="mb-4 flex items-center gap-3 flex-wrap">
+          <div class="w-12 h-12 rounded-2xl bg-neutral-900 text-white flex items-center justify-center font-bold">G&P</div>
+          <div class="flex-1 min-w-[240px]">
+            <h1 class="text-xl font-bold">GEP&Padel</h1>
+            <p class="text-sm text-neutral-500">Clasificación individual • BD compartida</p>
+          </div>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <input id="apiBase" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm" placeholder="Servidor API (opcional)" value="${API.base}"/>
+            <input id="apiKey" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm" placeholder="Clave de edición" value="${API.key}"/>
+            <button id="saveCfg" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm">Guardar</button>
+          </div>
+        </header>`);
+      root.appendChild(head);
+      head.querySelector("#saveCfg").onclick=()=>{ API.base=head.querySelector("#apiBase").value.trim(); API.key=head.querySelector("#apiKey").value.trim(); init(); };
+
+      const cls=T(`<section class="mb-6">
+        <h2 class="text-lg font-semibold mb-2">Clasificación</h2>
+        <div class="overflow-x-auto rounded-2xl border border-neutral-200 bg-white">
+          <table class="min-w-full text-sm">
+            <thead class="bg-neutral-50"><tr><th class="px-4 py-3 text-left">#</th><th class="px-4 py-3 text-left">Jugador/a</th><th class="px-4 py-3 text-center">Puntos</th><th class="px-4 py-3 text-center">PJ</th><th class="px-4 py-3 text-center">PG</th><th class="px-4 py-3 text-center">PP</th></tr></thead>
+            <tbody id="clsRows"></tbody>
+          </table>
+        </div>
+      </section>`);
+      root.appendChild(cls);
+      const clsRows=cls.querySelector("#clsRows");
+      standings.forEach((r,i)=>clsRows.appendChild(T(
+        `<tr class="border-t border-neutral-100"><td class="px-4 py-3 font-medium">${i+1}</td><td class="px-4 py-3">${r.name}${r.alias?` (${r.alias})`:""}</td><td class="px-4 py-3 font-semibold text-center">${r.puntos}</td><td class="px-4 py-3 text-center">${r.pj}</td><td class="px-4 py-3 text-center">${r.pg}</td><td class="px-4 py-3 text-center">${r.pp}</td></tr>`
+      )));
+
+      const sec=T(`<section class="mb-6 grid gap-4">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+          <h3 class="font-semibold mb-3">Crear partido</h3>
+          <div class="grid md:grid-cols-2 gap-3">
+            <input id="fecha" type="datetime-local" class="px-3 py-2 rounded-xl border border-neutral-300" />
+            <input id="foto" type="file" accept="image/*" class="text-sm" ${canEdit?'':'disabled'} />
+          </div>
+          <div class="grid md:grid-cols-2 gap-3 mt-3">
+            <div><div class="text-sm text-neutral-500 mb-1">Equipo A (2 jugadores)</div><div id="teamA" class="grid grid-cols-2 gap-2"></div></div>
+            <div><div class="text-sm text-neutral-500 mb-1">Equipo B (2 jugadores)</div><div id="teamB" class="grid grid-cols-2 gap-2"></div></div>
+          </div>
+          <textarea id="coment" class="mt-3 px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[80px]" placeholder="Comentarios"></textarea>
+          <div class="mt-3">
+            <button id="createMatch" class="px-4 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400 cursor-not-allowed'}">Crear partido</button>
+          </div>
+        </div>
+        <div class="grid gap-3" id="matchesList"></div>
+      </section>`);
+      root.appendChild(sec);
+
+      const pick=j=>T(`<button data-id="${j.id}" class="px-3 py-2 rounded-xl border border-neutral-300 text-left">${j.name}${j.alias?` (${j.alias})`:""}</button>`);
+      const teamA=sec.querySelector("#teamA"), teamB=sec.querySelector("#teamB");
+      const selA=new Set(), selB=new Set();
+      players.forEach(j=>{
+        const a=pick(j), b=pick(j);
+        a.onclick=()=>{ if(!canEdit) return; if(selA.has(j.id)) { selA.delete(j.id); a.classList.remove('bg-neutral-900','text-white','border-neutral-900'); }
+          else if(selA.size<2 && !selB.has(j.id)) { selA.add(j.id); a.classList.add('bg-neutral-900','text-white','border-neutral-900'); } };
+        b.onclick=()=>{ if(!canEdit) return; if(selB.has(j.id)) { selB.delete(j.id); b.classList.remove('bg-neutral-900','text-white','border-neutral-900'); }
+          else if(selB.size<2 && !selA.has(j.id)) { selB.add(j.id); b.classList.add('bg-neutral-900','text-white','border-neutral-900'); } };
+        teamA.appendChild(a); teamB.appendChild(b);
+      });
+
+      sec.querySelector("#createMatch").onclick=async()=>{
+        if(!canEdit) return alert("Introduce la clave de edición.");
+        if(selA.size!==2 || selB.size!==2) return alert("Cada equipo debe tener 2 jugadores.");
+        const fecha=sec.querySelector("#fecha").value || new Date().toISOString();
+        const coment=sec.querySelector("#coment").value.trim();
+        let fotoB64=null; const f=sec.querySelector("#foto").files?.[0];
+        if(f){ const ab=await f.arrayBuffer(); const b64=btoa(String.fromCharCode(...new Uint8Array(ab)));
+          fotoB64=`data:${f.type||"image/png"};base64,${b64}`; }
+        await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1:[...selA][0],a2:[...selA][1],b1:[...selB][0],b2:[...selB][1],comment:coment,photo_base64:fotoB64});
+        init();
+      };
+
+      const list=sec.querySelector("#matchesList");
+      if(matches.length===0) list.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
+      matches.forEach(m=>{
+        const a1=players.find(p=>p.id===m.a1)?.name||"¿?", a2=players.find(p=>p.id===m.a2)?.name||"¿?";
+        const b1=players.find(p=>p.id===m.b1)?.name||"¿?", b2=players.find(p=>p.id===m.b2)?.name||"¿?";
+        const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
+          <div class="flex items-center justify-between text-sm text-neutral-500">
+            <div>${m.date_iso?new Date(m.date_iso).toLocaleString():"Sin fecha"}</div>
+            <div>${m.finalizado?"Finalizado":"Pendiente"}</div>
+          </div>
+          <div class="mt-2 grid md:grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <div class="font-medium">${a1} + ${a2}</div>
+            <div class="text-center font-semibold">vs</div>
+            <div class="font-medium text-right">${b1} + ${b2}</div>
+          </div>
+          <div class="mt-3 grid md:grid-cols-3 gap-3 items-end">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="number" min="0" max="3" value="${m.sets_a ?? ''}" id="sa-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300" placeholder="Sets A" ${canEdit?'':'disabled'} />
+              <input type="number" min="0" max="3" value="${m.sets_b ?? ''}" id="sb-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300" placeholder="Sets B" ${canEdit?'':'disabled'} />
+              <button class="col-span-2 px-3 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+            </div>
+            <div><textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea></div>
+            <div>${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border"/>`:`<div class="text-sm text-neutral-500">Sin foto</div>`}</div>
+          </div>
+        </div>`);
+        card.querySelector(`#close-${m.id}`).onclick=async()=>{
+          if(!canEdit) return alert("Introduce la clave de edición.");
+          const sa=Number(card.querySelector(`#sa-${m.id}`).value);
+          const sb=Number(card.querySelector(`#sb-${m.id}`).value);
+          await API.put('/.netlify/functions/close-result',{id:m.id,setsA:sa,setsB:sb,comment:card.querySelector(`#com-${m.id}`).value});
+          init();
+        };
+        list.appendChild(card);
+      });
+
+      const secP=T(`<section class="mb-6 grid gap-4">
+        <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+          <h3 class="font-semibold mb-3">Añadir jugador/a</h3>
+          <div class="flex flex-col md:flex-row gap-2">
+            <input id="name" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Nombre y apellidos" />
+            <input id="alias" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Alias (opcional)" />
+            <button id="add" class="px-4 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400'}">Añadir</button>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-neutral-200 bg-white">
+          <div class="p-4 flex items-center justify-between"><h3 class="font-semibold">Jugadores/as (${players.length})</h3></div>
+          <ul class="divide-y" id="plist"></ul>
+        </div>
+      </section>`);
+      root.appendChild(secP);
+      secP.querySelector("#add").onclick=async()=>{
+        if(!canEdit) return alert("Introduce la clave de edición.");
+        const name=secP.querySelector("#name").value.trim();
+        const alias=secP.querySelector("#alias").value.trim();
+        if(!name) return;
+        await API.post('/.netlify/functions/add-player',{name,alias});
+        init();
+      };
+      const plist=secP.querySelector("#plist");
+      players.forEach(j=>plist.appendChild(T(
+        `<li class="p-4 flex items-center justify-between">
+          <div><div class="font-medium">${j.name}</div>${j.alias? `<div class="text-sm text-neutral-500">Alias: ${j.alias}</div>`:''}</div>
+          <button data-id="${j.id}" class="text-sm px-3 py-2 rounded-xl ${canEdit?'border border-neutral-300 hover:bg-neutral-50':'border border-neutral-200 text-neutral-300 cursor-not-allowed'}">Eliminar</button>
+        </li>`
+      )));
+      plist.querySelectorAll("button[data-id]").forEach(btn=>{
+        btn.onclick=async()=>{
+          if(!canEdit) return alert("Introduce la clave de edición.");
+          const id=btn.getAttribute("data-id");
+          if(!confirm("Eliminar jugador/a?")) return;
+          await API.post('/.netlify/functions/delete-player',{id});
+          init();
+        };
+      });
+    }
+
+    async function init(){
+      try{ const data=await loadAll(); draw(data); }
+      catch(e){
+        $("#root").innerHTML = `
+          <div class="p-4 rounded-2xl bg-yellow-50 border border-yellow-200 text-yellow-800">
+            Primera vez: el admin debe abrir <code>/.netlify/functions/migrate?key=TU_CLAVE</code> para crear las tablas.<br>
+            Error: ${e.message}
+          </div>`;
+      }
+    }
+    init();
+    if('serviceWorker' in navigator){
+      window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+    }
+  </script>
+</body>
+</html>
