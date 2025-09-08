@@ -1,7 +1,8 @@
 {
-  "name": "gep-padel",
+  "name": "geppadel",
   "version": "1.0.0",
   "type": "module",
+  "engines": { "node": ">=18" },
   "dependencies": {
     "@netlify/neon": "^0.7.0"
   }
