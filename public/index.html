@@ -155,7 +155,7 @@
             tbody.appendChild(T(
               `<tr class="border-t border-neutral-100 row">
                  <td class="px-4 py-3 font-medium">${i+1}</td>
-                 <td class="px-4 py-3 flex items-center gap-2">${miniAvatar(r.photo,r.name)} ${r.name}${r.alias?` <span class="text-neutral-500">(${r.alias})</span>`:''}</td>
+                 <td class="px-4 py-3 flex items-center gap-2">${miniAvatar((r.photo||r.photo_base64),r.name)} ${r.name}${r.alias?` <span class="text-neutral-500">(${r.alias})</span>`:''}</td>
                  <td class="px-4 py-3 font-semibold text-center">${r.puntos}</td>
                  <td class="px-4 py-3 text-center">${r.juegos}</td>
                  <td class="px-4 py-3 text-center">${r.pj}</td>
@@ -215,7 +215,7 @@
       // Selección con oscurecido (toggle)
       const pick = j => T(`
         <button data-id="${j.id}" class="px-3 py-2 rounded-xl border border-neutral-300 text-left flex items-center gap-2 transition-colors">
-          ${miniAvatar(j.photo_base64, j.name)}
+          ${miniAvatar(j.photo_base64 || j.photo, j.name)}
           <span class="player-name">${j.name}${j.alias?` (${j.alias})`:""}</span>
         </button>`);
       const teamA=sec.querySelector("#teamA"), teamB=sec.querySelector("#teamB");
@@ -283,45 +283,45 @@ Fecha: ${t.toLocaleString()}
         // tarjeta
         const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <div class="flex items-center justify-between text-sm mb-1">
-  <div class="text-neutral-500">${formatDT(m.date_iso)}</div>
-  <div class="${m.finalizado ? 'text-emerald-600' : 'text-amber-600'}">
-    ${m.finalizado ? "Finalizado" : "Pendiente"}
-  </div>
-</div>
+            <div class="text-neutral-500">${formatDT(m.date_iso)}</div>
+            <div class="${m.finalizado ? 'text-emerald-600' : 'text-amber-600'}">
+              ${m.finalizado ? "Finalizado" : "Pendiente"}
+            </div>
+          </div>
 
           <!-- Cabecera equipos -->
-          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-3">
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-2">
             <div class="flex items-center gap-2 justify-start">
-              ${miniAvatar(a1?.photo_base64,a1?.name)} ${a1?.name||'¿?'} <span class="mx-1">+</span>
-              ${miniAvatar(a2?.photo_base64,a2?.name)} ${a2?.name||'¿?'}
+              ${miniAvatar(a1?.photo_base64||a1?.photo,a1?.name)} ${a1?.name||'¿?'} <span class="mx-1">+</span>
+              ${miniAvatar(a2?.photo_base64||a2?.photo,a2?.name)} ${a2?.name||'¿?'}
             </div>
             <div class="mx-2 font-semibold text-center">vs</div>
             <div class="flex items-center gap-2 justify-start">
-              ${miniAvatar(b1?.photo_base64,b1?.name)} ${b1?.name||'¿?'} <span class="mx-1">+</span>
-              ${miniAvatar(b2?.photo_base64,b2?.name)} ${b2?.name||'¿?'}
+              ${miniAvatar(b1?.photo_base64||b1?.photo,b1?.name)} ${b1?.name||'¿?'} <span class="mx-1">+</span>
+              ${miniAvatar(b2?.photo_base64||b2?.photo,b2?.name)} ${b2?.name||'¿?'}
             </div>
           </div>
 
           <!-- Contenido: sets a la izquierda / foto+coment a la derecha -->
           <div class="grid md:grid-cols-[1fr_auto] gap-6 items-start">
-            <!-- Bloque de sets: 3 columnas debajo de + / vs / + -->
+            <!-- Bloque de sets: 3 columnas MUY juntas debajo de + / vs / + -->
             <div class="grid gap-3">
-              <div class="grid grid-cols-3 gap-x-6 gap-y-2 justify-items-center">
+              <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-2">
                 <!-- Set 1 -->
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa1-${m.id}" value="${m.s1a??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa1-${m.id}" value="${m.s1a??0}">
                 <span class="text-center text-sm text-neutral-500">Set 1</span>
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb1-${m.id}" value="${m.s1b??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb1-${m.id}" value="${m.s1b??0}">
                 <!-- Set 2 -->
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa2-${m.id}" value="${m.s2a??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa2-${m.id}" value="${m.s2a??0}">
                 <span class="text-center text-sm text-neutral-500">Set 2</span>
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb2-${m.id}" value="${m.s2b??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb2-${m.id}" value="${m.s2b??0}">
                 <!-- Set 3 -->
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa3-${m.id}" value="${m.s3a??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa3-${m.id}" value="${m.s3a??0}">
                 <span class="text-center text-sm text-neutral-500">Set 3</span>
-                <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb3-${m.id}" value="${m.s3b??0}">
+                <input type="number" min="0" class="w-14 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb3-${m.id}" value="${m.s3b??0}">
               </div>
 
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 mt-1">
                 <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
                 <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
               </div>
@@ -354,7 +354,7 @@ Fecha: ${t.toLocaleString()}
           mark(m.id,i);
         });
 
-        // Subir foto (con compresión + spinner)
+        // Subir foto
         const upBtn = card.querySelector(`#up-${m.id}`);
         if(upBtn){
           upBtn.onclick=(e)=>withLoading(e.currentTarget, async()=>{
@@ -422,7 +422,7 @@ Fecha: ${t.toLocaleString()}
       players.forEach(j=>{
         const row=T(
         `<li class="p-4 grid md:grid-cols-[auto_1fr_auto] items-center gap-3">
-          <img class="avatar" src="${j.photo_base64||'/icon-192.png'}" onerror="this.src='${AVA_FALLBACK}'" alt="${j.name}">
+          <img class="avatar" src="${(j.photo_base64||j.photo)||'/icon-192.png'}" onerror="this.src='${AVA_FALLBACK}'" alt="${j.name}">
           <div>
             <div class="font-medium">${j.name}</div>
             ${j.alias? `<div class="text-sm text-neutral-500">Alias: ${j.alias}</div>`:''}
@@ -441,7 +441,8 @@ Fecha: ${t.toLocaleString()}
           const alias=row.querySelector(`#na-${j.id}`).value.trim();
           const f=row.querySelector(`#np-${j.id}`).files?.[0];
           let photo=null; if(f) photo=await compressImage(f, 900, 0.85);
-          await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
+          const res = await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
+          alert('Cambios guardados ✅');
           await init();
         });
         row.querySelector("button[data-id]").onclick=(e)=>withLoading(e.currentTarget, async()=>{
