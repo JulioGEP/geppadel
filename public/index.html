@@ -13,13 +13,17 @@
     .cell-win{ font-weight:700; }
     .avatar{ width:28px;height:28px;border-radius:9999px;object-fit:cover;border:1px solid #e5e7eb;background:#fff }
     .row:hover{ background:#fafafa }
+    .btn{ @apply px-3 py-2 rounded-xl border border-neutral-300; }
+    .btn-dark{ @apply px-4 py-2 rounded-xl bg-neutral-900 text-white; }
+    .pick-active{ background:#111; color:#fff; border-color:#111; }
+    .pick-active img{ border-color:#111; }
   </style>
 </head>
 <body class="bg-neutral-50">
   <div id="root" class="max-w-6xl mx-auto p-4"></div>
 
   <script>
-    // --- API helper (solo clave; sin servidor externo) ---
+    // -------- API (sin servidor externo) --------
     const API = {
       get key(){ return localStorage.getItem('gep_api_key') || ''; },
       set key(v){ localStorage.setItem('gep_api_key', v || ''); },
@@ -31,18 +35,35 @@
     const $=s=>document.querySelector(s);
     const T=html=>{const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild;};
 
-    // Utils
+    // -------- Utils --------
+    const AVA_FALLBACK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAALElEQVQokWP8//8/AyWYgQEDYwMDA2EQJgZoYQxUM0GMg0GG0wGJQGgYAAAUyQJ0T+eG9wAAAABJRU5ErkJggg==';
+
+    function miniAvatar(ph,name){
+      const src = ph || '/icon-192.png';
+      return `<img class="avatar" src="${src}" onerror="this.src='${AVA_FALLBACK}'" alt="${name||''}" />`;
+    }
     const formatDT = iso => iso ? new Date(iso).toLocaleString() : 'Sin fecha';
+
+    // Comprimir imagen (reduce tamaño y evita errores 500/timeout)
+    async function compressImage(file, maxW = 1200, quality = 0.85){
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      await new Promise(res => { img.onload = res; img.src = url; });
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', quality);
+    }
+
     const toGCalDate = iso => {
-      const d=new Date(iso); const tz=d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-      return tz;
+      const d=new Date(iso); return d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
     };
     const gcalUrl = (title, details, startISO, endISO, location='') => {
       const s=toGCalDate(startISO), e=toGCalDate(endISO);
-      const q = new URLSearchParams({
-        action:'TEMPLATE',
-        text:title, details, location, dates:`${s}/${e}`
-      });
+      const q = new URLSearchParams({ action:'TEMPLATE', text:title, details, location, dates:`${s}/${e}` });
       return `https://calendar.google.com/calendar/render?${q}`;
     };
     const copy = async (text)=>{ try{ await navigator.clipboard.writeText(text); alert('Texto copiado ✅'); }catch(e){ prompt('Copia manualmente:', text); } };
@@ -56,16 +77,11 @@
       return {players,matches,standAll};
     }
 
-    function miniAvatar(ph,name){
-      const src = ph || './icon-192.png';
-      return `<img class="avatar" src="${src}" alt="${name||''}" />`;
-    }
-
     function draw({players,matches,standAll}){
       const canEdit=!!API.key;
       const root=$("#root"); root.innerHTML="";
 
-      // Header
+      // -------- Header --------
       const head=T(`
         <header class="mb-4 flex items-center gap-3 flex-wrap">
           <img src="./icon-192.png" class="w-12 h-12 rounded-2xl border" alt="GEP&Padel"/>
@@ -75,13 +91,13 @@
           </div>
           <div class="flex items-center gap-2">
             <input id="apiKey" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm" placeholder="Clave de edición" value="${API.key}"/>
-            <button id="saveCfg" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm">Guardar</button>
+            <button id="saveCfg" class="btn">Guardar</button>
           </div>
         </header>`);
       root.appendChild(head);
       head.querySelector("#saveCfg").onclick=()=>{ API.key=head.querySelector("#apiKey").value.trim(); init(); };
 
-      // Clasificación selector
+      // -------- Clasificación --------
       const sel=T(`
         <div class="mb-3 flex items-center gap-3">
           <h2 class="text-lg font-semibold">Clasificación</h2>
@@ -138,7 +154,8 @@
               `<tr class="border-t border-neutral-100 row">
                  <td class="px-4 py-3 font-medium">${i+1}</td>
                  <td class="px-4 py-3 flex items-center gap-2">
-                    ${miniAvatar(p1,'')} ${miniAvatar(p2,'')} ${r.name}
+                    ${miniAvatar(p1,'')} <span class="font-bold">+</span> ${miniAvatar(p2,'')}
+                    <span class="ml-2">${r.name}</span>
                  </td>
                  <td class="px-4 py-3 font-semibold text-center">${r.puntos}</td>
                  <td class="px-4 py-3 text-center">${r.juegos}</td>
@@ -157,10 +174,13 @@
       sel.querySelector('#tabInd').onclick=()=>{ sel.querySelector('#tabInd').classList.add('bg-white'); sel.querySelector('#tabPair').classList.remove('bg-white'); paintTable('ind'); };
       sel.querySelector('#tabPair').onclick=()=>{ sel.querySelector('#tabPair').classList.add('bg-white'); sel.querySelector('#tabInd').classList.remove('bg-white'); paintTable('pair'); };
 
-      // Crear partido (sin archivo)
+      // -------- margen extra entre bloques --------
+      root.appendChild(T(`<div class="mt-8"></div>`));
+
+      // -------- Crear nuevo partido --------
       const sec=T(`<section class="mb-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
-          <h3 class="font-semibold mb-3">Crear partido</h3>
+          <h3 class="font-semibold mb-3">Crear Nuevo Partido</h3>
           <div class="grid md:grid-cols-2 gap-3">
             <input id="fecha" type="datetime-local" class="px-3 py-2 rounded-xl border border-neutral-300" />
           </div>
@@ -170,22 +190,34 @@
           </div>
           <textarea id="coment" class="mt-3 px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[80px]" placeholder="Comentarios"></textarea>
           <div class="mt-3 flex items-center gap-2">
-            <button id="createMatch" class="px-4 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400 cursor-not-allowed'}">Crear partido</button>
+            <button id="createMatch" class="${canEdit?'btn-dark':'btn text-neutral-400 cursor-not-allowed'}">Crear Nuevo Partido</button>
             <div id="shareBox" class="hidden text-sm text-neutral-600"></div>
           </div>
         </div>
       </section>`);
       root.appendChild(sec);
 
-      const pick=j=>T(`<button data-id="${j.id}" class="px-3 py-2 rounded-xl border border-neutral-300 text-left flex items-center gap-2">${miniAvatar(j.photo_base64,j.name)} <span>${j.name}${j.alias?` (${j.alias})`:""}</span></button>`);
+      // Selección con oscurecido (toggle)
+      const pick = j => T(`
+        <button data-id="${j.id}" class="px-3 py-2 rounded-xl border border-neutral-300 text-left flex items-center gap-2 transition-colors">
+          ${miniAvatar(j.photo_base64, j.name)}
+          <span class="player-name">${j.name}${j.alias?` (${j.alias})`:""}</span>
+        </button>`);
       const teamA=sec.querySelector("#teamA"), teamB=sec.querySelector("#teamB");
       const selA=new Set(), selB=new Set();
+
+      function toggle(btn,set,id,otherSet){
+        if (set.has(id)) { set.delete(id); btn.classList.remove('pick-active'); }
+        else {
+          if (set.size>=2 || otherSet.has(id)) return;
+          set.add(id); btn.classList.add('pick-active');
+        }
+      }
+
       players.forEach(j=>{
         const a=pick(j), b=pick(j);
-        a.onclick=()=>{ if(!canEdit) return; if(selA.has(j.id)) { selA.delete(j.id); a.classList.remove('bg-neutral-900','text-white','border-neutral-900'); }
-          else if(selA.size<2 && !selB.has(j.id)) { selA.add(j.id); a.classList.add('bg-neutral-900','text-white','border-neutral-900'); } };
-        b.onclick=()=>{ if(!canEdit) return; if(selB.has(j.id)) { selB.delete(j.id); b.classList.remove('bg-neutral-900','text-white','border-neutral-900'); }
-          else if(selB.size<2 && !selA.has(j.id)) { selB.add(j.id); b.classList.add('bg-neutral-900','text-white','border-neutral-900'); } };
+        a.onclick=()=>{ if(!canEdit) return; toggle(a,selA,j.id,selB); };
+        b.onclick=()=>{ if(!canEdit) return; toggle(b,selB,j.id,selA); };
         teamA.appendChild(a); teamB.appendChild(b);
       });
 
@@ -210,34 +242,36 @@ Fecha: ${t.toLocaleString()}
         const fecha=sec.querySelector("#fecha").value || new Date().toISOString();
         const coment=sec.querySelector("#coment").value.trim();
         const [a1,a2]=[...selA], [b1,b2]=[...selB];
-        const res = await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1,a2,b1,b2,comment:coment});
-        const share = buildShare(a1,a2,b1,b2,fecha);
-        const box = sec.querySelector('#shareBox');
-        box.classList.remove('hidden');
-        box.innerHTML = `
-          <div class="p-2 rounded-lg bg-neutral-100">
-            <div class="mb-1 font-medium">Compartir:</div>
-            <textarea class="w-full text-sm p-2 border rounded-lg mb-2" rows="3">${share.txt}</textarea>
-            <div class="flex items-center gap-2">
-              <button id="copyShare" class="px-3 py-1 rounded-lg border">Copiar texto</button>
-              <a class="px-3 py-1 rounded-lg border" href="${share.url}" target="_blank" rel="noopener">Añadir a Google Calendar</a>
-            </div>
-          </div>`;
-        box.querySelector('#copyShare').onclick=()=>copy(share.txt);
-        init(); // recarga
+        try{
+          await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1,a2,b1,b2,comment:coment});
+          const share = buildShare(a1,a2,b1,b2,fecha);
+          const box = sec.querySelector('#shareBox');
+          box.classList.remove('hidden');
+          box.innerHTML = `
+            <div class="p-2 rounded-lg bg-neutral-100">
+              <div class="mb-1 font-medium">Compartir:</div>
+              <textarea class="w-full text-sm p-2 border rounded-lg mb-2" rows="3">${share.txt}</textarea>
+              <div class="flex items-center gap-2">
+                <button id="copyShare" class="btn">Copiar texto</button>
+                <a class="btn" href="${share.url}" target="_blank" rel="noopener">Añadir a Google Calendar</a>
+              </div>
+            </div>`;
+          box.querySelector('#copyShare').onclick=()=>copy(share.txt);
+          init();
+        }catch(e){ alert('Error creando partido: '+e.message); }
       };
 
-      // Histórico de partidos
+      // -------- Histórico de partidos --------
       root.appendChild(T(`<h3 class="text-lg font-semibold mt-6 mb-2">Histórico de partidos</h3>`));
       const listWrap=T(`<div class="grid gap-3" id="matchesList"></div>`);
       root.appendChild(listWrap);
 
       const P = id => players.find(p=>p.id===id);
       const setRow=(id,idx,vals={a:0,b:0})=>{
-        const el=T(`<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <input type="number" min="0" class="px-3 py-2 rounded-xl border border-neutral-300 text-right" id="sa${idx}-${id}" value="${vals.a??0}">
-          <div class="text-center text-sm text-neutral-500">Set ${idx}</div>
-          <input type="number" min="0" class="px-3 py-2 rounded-xl border border-neutral-300" id="sb${idx}-${id}" value="${vals.b??0}">
+        const el=T(`<div class="flex items-center gap-2">
+          <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa${idx}-${id}" value="${vals.a??0}">
+          <span class="text-center text-sm text-neutral-500 w-10">Set ${idx}</span>
+          <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb${idx}-${id}" value="${vals.b??0}">
         </div>`);
         const mark=()=>{
           const a=+el.querySelector(`#sa${idx}-${id}`).value||0;
@@ -253,51 +287,59 @@ Fecha: ${t.toLocaleString()}
       matches.forEach(m=>{
         const a1=P(m.a1), a2=P(m.a2), b1=P(m.b1), b2=P(m.b2);
         const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
-          <div class="flex items-center justify-between text-sm text-neutral-500">
+          <div class="flex items-center justify-between text-sm text-neutral-500 mb-1">
             <div>${formatDT(m.date_iso)}</div>
             <div>${m.finalizado?"Finalizado":"Pendiente"}</div>
           </div>
-          <div class="mt-2 grid md:grid-cols-[1fr_auto_1fr] items-center gap-3">
-            <div class="font-medium flex items-center gap-2">
-              ${miniAvatar(a1?.photo_base64,a1?.name)} ${a1?.name||'¿?'} + ${miniAvatar(a2?.photo_base64,a2?.name)} ${a2?.name||'¿?'}
+
+          <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-center gap-2">
+              ${miniAvatar(a1?.photo_base64,a1?.name)} ${a1?.name||'¿?'} <span class="mx-1">+</span>
+              ${miniAvatar(a2?.photo_base64,a2?.name)} ${a2?.name||'¿?'}
             </div>
-            <div class="text-center font-semibold">vs</div>
-            <div class="font-medium text-right flex items-center gap-2 justify-end">
-              ${miniAvatar(b1?.photo_base64,b1?.name)} ${b1?.name||'¿?'} + ${miniAvatar(b2?.photo_base64,b2?.name)} ${b2?.name||'¿?'}
+            <div class="mx-3 font-semibold">vs</div>
+            <div class="flex items-center gap-2">
+              ${miniAvatar(b1?.photo_base64,b1?.name)} ${b1?.name||'¿?'} <span class="mx-1">+</span>
+              ${miniAvatar(b2?.photo_base64,b2?.name)} ${b2?.name||'¿?'}
             </div>
           </div>
 
-          <div class="mt-3 grid md:grid-cols-3 gap-3 items-start">
+          <div class="grid md:grid-cols-[auto_1fr] gap-4">
             <div class="grid gap-2">
               ${setRow(m.id,1,{a:m.s1a,b:m.s1b}).outerHTML}
               ${setRow(m.id,2,{a:m.s2a,b:m.s2b}).outerHTML}
               ${setRow(m.id,3,{a:m.s3a,b:m.s3b}).outerHTML}
-              <button class="px-3 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+              <div class="flex items-center gap-2">
+                <button class="${canEdit?'btn-dark':'btn text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+                <button class="btn" id="del-${m.id}">Eliminar partido</button>
+              </div>
             </div>
-            <div>
-              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
-            </div>
+
             <div class="grid gap-2">
-              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border"/>`:''}
+              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-h-64 object-contain"/>`:''}
               ${!m.finalizado ? `
-                <input type="file" id="ph-${m.id}" accept="image/*" class="text-sm" ${canEdit?'':'disabled'}>
-                <button class="px-3 py-2 rounded-xl ${canEdit?'border border-neutral-300':'border border-neutral-200 text-neutral-300'}" id="up-${m.id}">Subir foto</button>
+                <div class="flex items-center gap-2">
+                  <input type="file" id="ph-${m.id}" accept="image/*" class="text-sm">
+                  <button class="btn" id="up-${m.id}">Subir foto</button>
+                </div>
               `:''}
+              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
             </div>
           </div>
         </div>`);
 
-        // Subir foto (solo pendientes)
+        // Subir foto (con compresión)
         const upBtn = card.querySelector(`#up-${m.id}`);
         if(upBtn){
           upBtn.onclick=async()=>{
             if(!canEdit) return alert("Introduce la clave de edición.");
             const f=card.querySelector(`#ph-${m.id}`).files?.[0];
-            if(!f) return;
-            const ab=await f.arrayBuffer(); const b64=btoa(String.fromCharCode(...new Uint8Array(ab)));
-            const photo=`data:${f.type||"image/png"};base64,${b64}`;
-            await API.post('/.netlify/functions/update-match-photo',{id:m.id,photo_base64:photo});
-            init();
+            if(!f) return alert('Selecciona una imagen.');
+            try{
+              const photo = await compressImage(f, 1400, 0.82);
+              await API.post('/.netlify/functions/update-match-photo',{id:m.id,photo_base64:photo});
+              init();
+            }catch(e){ alert('Error subiendo foto: '+e.message); }
           };
         }
 
@@ -308,21 +350,36 @@ Fecha: ${t.toLocaleString()}
             a:Number(card.querySelector(`#sa${i}-${m.id}`).value)||0,
             b:Number(card.querySelector(`#sb${i}-${m.id}`).value)||0
           }));
-          await API.put('/.netlify/functions/close-result',{id:m.id,sets:s,comment:card.querySelector(`#com-${m.id}`).value});
-          init();
+          try{
+            await API.put('/.netlify/functions/close-result',{id:m.id,sets:s,comment:card.querySelector(`#com-${m.id}`).value});
+            init();
+          }catch(e){ alert('Error cerrando resultado: '+e.message); }
+        };
+
+        // Eliminar partido (pide contraseña sin mostrarla)
+        card.querySelector(`#del-${m.id}`).onclick=async()=>{
+          if(!canEdit) return alert("Introduce la clave de edición.");
+          const pass = prompt('Escribe la contraseña para eliminar'); // no mostramos la contraseña real
+          if(!pass) return;
+          if(pass.trim()!=='eliminar') return alert('Contraseña incorrecta.');
+          if(!confirm('¿Eliminar partido? Esta acción no se puede deshacer.')) return;
+          try{
+            await API.post('/.netlify/functions/delete-match',{id:m.id});
+            init();
+          }catch(e){ alert('Error eliminando: '+e.message); }
         };
 
         list.appendChild(card);
       });
 
-      // Gestión de jugadores (edición + foto)
+      // -------- Gestión de jugadores (editar + foto) --------
       const secP=T(`<section class="mt-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <h3 class="font-semibold mb-3">Añadir jugador/a</h3>
           <div class="flex flex-col md:flex-row gap-2">
             <input id="name" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Nombre y apellidos" />
             <input id="alias" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Alias (opcional)" />
-            <button id="add" class="px-4 py-2 rounded-xl ${canEdit?'bg-neutral-900 text-white':'border border-neutral-300 text-neutral-400'}">Añadir</button>
+            <button id="add" class="${canEdit?'btn-dark':'btn text-neutral-400'}">Añadir</button>
           </div>
         </div>
         <div class="rounded-2xl border border-neutral-200 bg-white">
@@ -337,15 +394,17 @@ Fecha: ${t.toLocaleString()}
         const name=secP.querySelector("#name").value.trim();
         const alias=secP.querySelector("#alias").value.trim();
         if(!name) return;
-        await API.post('/.netlify/functions/add-player',{name,alias});
-        init();
+        try{
+          await API.post('/.netlify/functions/add-player',{name,alias});
+          init();
+        }catch(e){ alert('Error añadiendo jugador: '+e.message); }
       };
 
       const plist=secP.querySelector("#plist");
       players.forEach(j=>{
         const row=T(
         `<li class="p-4 grid md:grid-cols-[auto_1fr_auto] items-center gap-3">
-          <img class="avatar" src="${j.photo_base64||'./icon-192.png'}" alt="${j.name}">
+          <img class="avatar" src="${j.photo_base64||'/icon-192.png'}" onerror="this.src='${AVA_FALLBACK}'" alt="${j.name}">
           <div>
             <div class="font-medium">${j.name}</div>
             ${j.alias? `<div class="text-sm text-neutral-500">Alias: ${j.alias}</div>`:''}
@@ -353,7 +412,7 @@ Fecha: ${t.toLocaleString()}
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo nombre" id="nn-${j.id}">
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo alias" id="na-${j.id}">
               <input type="file" accept="image/*" id="np-${j.id}">
-              <button class="px-3 py-1 rounded-lg border" id="save-${j.id}">Guardar cambios</button>
+              <button class="btn" id="save-${j.id}">Guardar cambios</button>
             </div>
           </div>
           <button data-id="${j.id}" class="text-sm px-3 py-2 rounded-xl ${canEdit?'border border-neutral-300 hover:bg-neutral-50':'border border-neutral-200 text-neutral-300 cursor-not-allowed'}">Eliminar</button>
@@ -364,15 +423,17 @@ Fecha: ${t.toLocaleString()}
           const alias=row.querySelector(`#na-${j.id}`).value.trim();
           const f=row.querySelector(`#np-${j.id}`).files?.[0];
           let photo=null;
-          if(f){ const ab=await f.arrayBuffer(); const b64=btoa(String.fromCharCode(...new Uint8Array(ab))); photo=`data:${f.type||"image/png"};base64,${b64}`; }
-          await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
-          init();
+          if(f){ photo=await compressImage(f, 900, 0.85); }
+          try{
+            await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
+            init();
+          }catch(e){ alert('Error guardando cambios: '+e.message); }
         };
         row.querySelector("button[data-id]").onclick=async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           if(!confirm("Eliminar jugador/a?")) return;
-          await API.post('/.netlify/functions/delete-player',{id:j.id});
-          init();
+          try{ await API.post('/.netlify/functions/delete-player',{id:j.id}); init(); }
+          catch(e){ alert('Error eliminando jugador: '+e.message); }
         };
         plist.appendChild(row);
       });
