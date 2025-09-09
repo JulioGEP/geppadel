@@ -13,17 +13,18 @@
     .cell-win{ font-weight:700; }
     .avatar{ width:28px;height:28px;border-radius:9999px;object-fit:cover;border:1px solid #e5e7eb;background:#fff }
     .row:hover{ background:#fafafa }
-    .btn{ @apply px-3 py-2 rounded-xl border border-neutral-300; }
-    .btn-dark{ @apply px-4 py-2 rounded-xl bg-neutral-900 text-white; }
     .pick-active{ background:#111; color:#fff; border-color:#111; }
     .pick-active img{ border-color:#111; }
+    .btn-soft{ background:#f5f5f5; border:1px solid #e5e7eb; border-radius:12px; padding:.5rem .75rem; }
+    .btn-soft:hover{ background:#eee; }
+    .btn-dark{ background:#111; color:#fff; border-radius:12px; padding:.6rem 1rem; }
   </style>
 </head>
 <body class="bg-neutral-50">
   <div id="root" class="max-w-6xl mx-auto p-4"></div>
 
   <script>
-    // -------- API (sin servidor externo) --------
+    // -------- API --------
     const API = {
       get key(){ return localStorage.getItem('gep_api_key') || ''; },
       set key(v){ localStorage.setItem('gep_api_key', v || ''); },
@@ -44,7 +45,6 @@
     }
     const formatDT = iso => iso ? new Date(iso).toLocaleString() : 'Sin fecha';
 
-    // Comprimir imagen (reduce tamaño y evita errores 500/timeout)
     async function compressImage(file, maxW = 1200, quality = 0.85){
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -58,9 +58,7 @@
       return canvas.toDataURL('image/jpeg', quality);
     }
 
-    const toGCalDate = iso => {
-      const d=new Date(iso); return d.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-    };
+    const toGCalDate = iso => new Date(iso).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
     const gcalUrl = (title, details, startISO, endISO, location='') => {
       const s=toGCalDate(startISO), e=toGCalDate(endISO);
       const q = new URLSearchParams({ action:'TEMPLATE', text:title, details, location, dates:`${s}/${e}` });
@@ -91,7 +89,7 @@
           </div>
           <div class="flex items-center gap-2">
             <input id="apiKey" class="px-3 py-2 rounded-xl border border-neutral-300 text-sm" placeholder="Clave de edición" value="${API.key}"/>
-            <button id="saveCfg" class="btn">Guardar</button>
+            <button id="saveCfg" class="btn-soft">Guardar</button>
           </div>
         </header>`);
       root.appendChild(head);
@@ -134,7 +132,6 @@
              </tr></thead>`;
 
         const tbody = document.createElement('tbody');
-        tbody.id='clsRows';
         rows.forEach((r,i)=>{
           if(mode==='ind'){
             tbody.appendChild(T(
@@ -190,7 +187,7 @@
           </div>
           <textarea id="coment" class="mt-3 px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[80px]" placeholder="Comentarios"></textarea>
           <div class="mt-3 flex items-center gap-2">
-            <button id="createMatch" class="${canEdit?'btn-dark':'btn text-neutral-400 cursor-not-allowed'}">Crear Nuevo Partido</button>
+            <button id="createMatch" class="${canEdit?'btn-dark':'btn-soft text-neutral-400 cursor-not-allowed'}">Crear Nuevo Partido</button>
             <div id="shareBox" class="hidden text-sm text-neutral-600"></div>
           </div>
         </div>
@@ -205,15 +202,10 @@
         </button>`);
       const teamA=sec.querySelector("#teamA"), teamB=sec.querySelector("#teamB");
       const selA=new Set(), selB=new Set();
-
-      function toggle(btn,set,id,otherSet){
+      function toggle(btn,set,id,other){
         if (set.has(id)) { set.delete(id); btn.classList.remove('pick-active'); }
-        else {
-          if (set.size>=2 || otherSet.has(id)) return;
-          set.add(id); btn.classList.add('pick-active');
-        }
+        else { if(set.size>=2 || other.has(id)) return; set.add(id); btn.classList.add('pick-active'); }
       }
-
       players.forEach(j=>{
         const a=pick(j), b=pick(j);
         a.onclick=()=>{ if(!canEdit) return; toggle(a,selA,j.id,selB); };
@@ -230,9 +222,7 @@ Equipo A: ${P(a1)} + ${P(a2)}
 Equipo B: ${P(b1)} + ${P(b2)}
 Fecha: ${t.toLocaleString()}
 `;
-        const url = gcalUrl('Partido de pádel',
-          `Equipo A: ${P(a1)} + ${P(a2)} | Equipo B: ${P(b1)} + ${P(b2)}`,
-          t.toISOString(), end.toISOString());
+        const url = gcalUrl('Partido de pádel',`Equipo A: ${P(a1)} + ${P(a2)} | Equipo B: ${P(b1)} + ${P(b2)}`,t.toISOString(), end.toISOString());
         return { txt, url };
       }
 
@@ -252,8 +242,8 @@ Fecha: ${t.toLocaleString()}
               <div class="mb-1 font-medium">Compartir:</div>
               <textarea class="w-full text-sm p-2 border rounded-lg mb-2" rows="3">${share.txt}</textarea>
               <div class="flex items-center gap-2">
-                <button id="copyShare" class="btn">Copiar texto</button>
-                <a class="btn" href="${share.url}" target="_blank" rel="noopener">Añadir a Google Calendar</a>
+                <button id="copyShare" class="btn-soft">Copiar texto</button>
+                <a class="btn-soft" href="${share.url}" target="_blank" rel="noopener">Añadir a Google Calendar</a>
               </div>
             </div>`;
           box.querySelector('#copyShare').onclick=()=>copy(share.txt);
@@ -304,26 +294,26 @@ Fecha: ${t.toLocaleString()}
             </div>
           </div>
 
-          <div class="grid md:grid-cols-[auto_1fr] gap-4">
+          <div class="grid md:grid-cols-[1fr_auto] gap-6 items-start">
             <div class="grid gap-2">
               ${setRow(m.id,1,{a:m.s1a,b:m.s1b}).outerHTML}
               ${setRow(m.id,2,{a:m.s2a,b:m.s2b}).outerHTML}
               ${setRow(m.id,3,{a:m.s3a,b:m.s3b}).outerHTML}
               <div class="flex items-center gap-2">
-                <button class="${canEdit?'btn-dark':'btn text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
-                <button class="btn" id="del-${m.id}">Eliminar partido</button>
+                <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+                <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
               </div>
             </div>
 
-            <div class="grid gap-2">
-              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-h-64 object-contain"/>`:''}
+            <div class="grid gap-2 justify-items-end">
+              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-w-[280px] max-h-[220px] object-cover"/>`:''}
               ${!m.finalizado ? `
                 <div class="flex items-center gap-2">
                   <input type="file" id="ph-${m.id}" accept="image/*" class="text-sm">
-                  <button class="btn" id="up-${m.id}">Subir foto</button>
+                  <button class="btn-soft" id="up-${m.id}">Subir foto</button>
                 </div>
               `:''}
-              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
+              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full md:w-[380px] min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
             </div>
           </div>
         </div>`);
@@ -343,7 +333,7 @@ Fecha: ${t.toLocaleString()}
           };
         }
 
-        // Cerrar resultado (3 sets de juegos)
+        // Cerrar resultado
         card.querySelector(`#close-${m.id}`).onclick=async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           const s = [1,2,3].map(i=>({
@@ -356,10 +346,10 @@ Fecha: ${t.toLocaleString()}
           }catch(e){ alert('Error cerrando resultado: '+e.message); }
         };
 
-        // Eliminar partido (pide contraseña sin mostrarla)
+        // Eliminar partido (contraseña oculta)
         card.querySelector(`#del-${m.id}`).onclick=async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
-          const pass = prompt('Escribe la contraseña para eliminar'); // no mostramos la contraseña real
+          const pass = prompt('Escribe la contraseña para eliminar'); // no se muestra la contraseña real
           if(!pass) return;
           if(pass.trim()!=='eliminar') return alert('Contraseña incorrecta.');
           if(!confirm('¿Eliminar partido? Esta acción no se puede deshacer.')) return;
@@ -372,14 +362,14 @@ Fecha: ${t.toLocaleString()}
         list.appendChild(card);
       });
 
-      // -------- Gestión de jugadores (editar + foto) --------
+      // -------- Gestión de jugadores --------
       const secP=T(`<section class="mt-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <h3 class="font-semibold mb-3">Añadir jugador/a</h3>
           <div class="flex flex-col md:flex-row gap-2">
             <input id="name" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Nombre y apellidos" />
             <input id="alias" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Alias (opcional)" />
-            <button id="add" class="${canEdit?'btn-dark':'btn text-neutral-400'}">Añadir</button>
+            <button id="add" class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}">Añadir</button>
           </div>
         </div>
         <div class="rounded-2xl border border-neutral-200 bg-white">
@@ -394,10 +384,8 @@ Fecha: ${t.toLocaleString()}
         const name=secP.querySelector("#name").value.trim();
         const alias=secP.querySelector("#alias").value.trim();
         if(!name) return;
-        try{
-          await API.post('/.netlify/functions/add-player',{name,alias});
-          init();
-        }catch(e){ alert('Error añadiendo jugador: '+e.message); }
+        try{ await API.post('/.netlify/functions/add-player',{name,alias}); init(); }
+        catch(e){ alert('Error añadiendo jugador: '+e.message); }
       };
 
       const plist=secP.querySelector("#plist");
@@ -412,18 +400,17 @@ Fecha: ${t.toLocaleString()}
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo nombre" id="nn-${j.id}">
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo alias" id="na-${j.id}">
               <input type="file" accept="image/*" id="np-${j.id}">
-              <button class="btn" id="save-${j.id}">Guardar cambios</button>
+              <button class="btn-soft" id="save-${j.id}">Guardar cambios</button>
             </div>
           </div>
-          <button data-id="${j.id}" class="text-sm px-3 py-2 rounded-xl ${canEdit?'border border-neutral-300 hover:bg-neutral-50':'border border-neutral-200 text-neutral-300 cursor-not-allowed'}">Eliminar</button>
+          <button data-id="${j.id}" class="text-sm btn-soft">Eliminar</button>
         </li>`);
         row.querySelector(`#save-${j.id}`).onclick=async()=>{
           if(!canEdit) return;
           const name=row.querySelector(`#nn-${j.id}`).value.trim();
           const alias=row.querySelector(`#na-${j.id}`).value.trim();
           const f=row.querySelector(`#np-${j.id}`).files?.[0];
-          let photo=null;
-          if(f){ photo=await compressImage(f, 900, 0.85); }
+          let photo=null; if(f) photo=await compressImage(f, 900, 0.85);
           try{
             await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
             init();
@@ -451,7 +438,6 @@ Fecha: ${t.toLocaleString()}
     }
     init();
 
-    // SW (PWA)
     if('serviceWorker' in navigator){
       window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
     }
