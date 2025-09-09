@@ -298,30 +298,43 @@ Fecha: ${t.toLocaleString()}
             </div>
           </div>
 
-          <!-- Contenido: sets a la izquierda / foto+coment a la derecha -->
-          <div class="grid md:grid-cols-[1fr_auto] gap-6 items-start">
-            <!-- Bloque de sets: columnas muy juntas y pegadas a la izquierda -->
-            <div class="grid gap-3">
-              <div class="grid grid-cols-[72px_auto_72px] gap-x-3 gap-y-2 place-items-start">
-                <!-- Set 1 -->
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa1-${m.id}" value="${m.s1a??0}">
-                <span class="text-sm text-neutral-500 leading-[44px]">Set 1</span>
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb1-${m.id}" value="${m.s1b??0}">
-                <!-- Set 2 -->
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa2-${m.id}" value="${m.s2a??0}">
-                <span class="text-sm text-neutral-500 leading-[44px]">Set 2</span>
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb2-${m.id}" value="${m.s2b??0}">
-                <!-- Set 3 -->
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa3-${m.id}" value="${m.s3a??0}">
-                <span class="text-sm text-neutral-500 leading-[44px]">Set 3</span>
-                <input type="number" min="0" class="w-[72px] text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb3-${m.id}" value="${m.s3b??0}">
-              </div>
+          <!-- Bloque de sets (diseño anterior, compacto y natural) -->
+<div class="grid gap-3">
+  <div class="grid grid-cols-[80px_auto_80px] items-center gap-x-4 gap-y-2">
+    <!-- Set 1 -->
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sa1-${m.id}" value="${m.s1a??0}">
+    <span class="text-sm text-neutral-500">Set 1</span>
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sb1-${m.id}" value="${m.s1b??0}">
 
-              <div class="flex items-center gap-2 mt-1">
-                <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
-                <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
-              </div>
-            </div>
+    <!-- Set 2 -->
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sa2-${m.id}" value="${m.s2a??0}">
+    <span class="text-sm text-neutral-500">Set 2</span>
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sb2-${m.id}" value="${m.s2b??0}">
+
+    <!-- Set 3 -->
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sa3-${m.id}" value="${m.s3a??0}">
+    <span class="text-sm text-neutral-500">Set 3</span>
+    <input type="number" min="0"
+      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
+      id="sb3-${m.id}" value="${m.s3b??0}">
+  </div>
+
+  <div class="flex items-center gap-2 mt-1">
+    <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+    <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
+  </div>
+</div>
+
 
             <!-- Bloque foto+comentario a la derecha -->
             <div class="grid gap-2 justify-items-end">
