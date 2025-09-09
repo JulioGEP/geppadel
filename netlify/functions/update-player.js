@@ -1,42 +1,33 @@
 // netlify/functions/update-player.js
-import { sql } from './_common/db.js';
-import { json, preflight, requireAuth } from './_common/http.js';
+import { sql, requireKey, json } from './_common/db.js';
 
-export default async (req) => {
-  const p = preflight(req); if (p) return p;
-  if (!requireAuth(req)) return json(req, { error: 'unauthorized' }, 401);
-
+export async function handler(event) {
   try {
-    const b = await req.json().catch(() => ({}));
-    const { id } = b;
-    if (!id) return json(req, { error: 'id-required' }, 400);
-
-    const sets = [];
-    const params = [];
-
-    if (typeof b.name === 'string' && b.name.trim()) {
-      sets.push(`name = $${params.length + 1}`);
-      params.push(b.name.trim());
+    if (event.httpMethod !== 'POST' && event.httpMethod !== 'PUT') {
+      return json({ error: 'method-not-allowed' }, 405);
     }
-    if (typeof b.alias === 'string') {
-      sets.push(`alias = $${params.length + 1}`);
-      params.push(b.alias.trim() || null);
-    }
-    if (typeof b.photo_base64 === 'string') {
-      sets.push(`photo_base64 = $${params.length + 1}`);
-      params.push(b.photo_base64 || null);
-    }
+    requireKey(event);
 
-    if (sets.length === 0) {
-      return json(req, { error: 'nothing-to-update' }, 400);
-    }
+    const { id, name = null, alias = null, photo_base64 = null } =
+      JSON.parse(event.body || '{}');
 
-    params.push(id);
-    const q = `UPDATE players SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING id,name,alias,photo_base64`;
+    if (!id) return json({ error: 'missing-id' }, 400);
 
-    const rows = await sql.unsafe(q, params);
-    return json(req, { ok: true, player: rows?.[0] || null });
-  } catch (e) {
-    return json(req, { error: 'update-failed', details: String(e.message || e) }, 500);
+    // Asegura columnas y actualiza solo lo recibido (COALESCE deja el valor actual si llega null)
+    const rows = await sql`
+      UPDATE players
+      SET
+        name         = COALESCE(${name}, name),
+        alias        = COALESCE(${alias}, alias),
+        photo_base64 = COALESCE(${photo_base64}, photo_base64)
+      WHERE id = ${id}
+      RETURNING id, name, alias, photo_base64
+    `;
+
+    if (rows.length === 0) return json({ error: 'not-found' }, 404);
+    return json({ ok: true, player: rows[0] });
+  } catch (err) {
+    const status = err.statusCode || 500;
+    return json({ error: 'update-failed', details: String(err.message || err) }, status);
   }
-};
+}
