@@ -19,15 +19,14 @@
     .btn-soft:hover{ background:#eee; }
     .btn-dark{ background:#111; color:#fff; border-radius:12px; padding:.6rem 1rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .spin-slow { animation: spin 1.1s linear infinite; }
-    .btn-soft, .btn-dark { position: relative; }
+    .animate-spin{ animation: spin 1.1s linear infinite; }
   </style>
 </head>
 <body class="bg-neutral-50">
   <div id="root" class="max-w-6xl mx-auto p-4"></div>
 
   <script>
-    // -------- API --------
+    // ---------------- API ----------------
     const API = {
       get key(){ return localStorage.getItem('gep_api_key') || ''; },
       set key(v){ localStorage.setItem('gep_api_key', v || ''); },
@@ -39,7 +38,7 @@
     const $=s=>document.querySelector(s);
     const T=html=>{const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild;};
 
-    // -------- Utils --------
+    // ---------------- Utils ----------------
     const AVA_FALLBACK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAALElEQVQokWP8//8/AyWYgQEDYwMDA2EQJgZoYQxUM0GMg0GG0wGJQGgYAAAUyQJ0T+eG9wAAAABJRU5ErkJggg==';
 
     function miniAvatar(ph,name){
@@ -69,15 +68,15 @@
     };
     const copy = async (text)=>{ try{ await navigator.clipboard.writeText(text); alert('Texto copiado ✅'); }catch(e){ prompt('Copia manualmente:', text); } };
 
-    async function withLoading(btn, action) {
-      if (!btn) return action();
-      const old = btn.innerHTML;
-      const oldW = btn.offsetWidth;
-      btn.style.width = oldW + 'px';
+    async function spin(btn, task) {
+      if (!btn) return task();
+      const html = btn.innerHTML;
+      const w = btn.offsetWidth;
+      btn.style.width = w + 'px';
       btn.disabled = true;
-      btn.innerHTML = `<img src="./icon-192.png" class="h-5 w-5 spin-slow mx-auto" alt="">`;
-      try { return await action(); }
-      finally { btn.disabled = false; btn.style.width=''; btn.innerHTML = old; }
+      btn.innerHTML = `<img src="./icon-192.png" class="h-5 w-5 animate-spin mx-auto" alt="">`;
+      try { return await task(); }
+      finally { btn.disabled = false; btn.style.width=''; btn.innerHTML = html; }
     }
 
     async function loadAll(){
@@ -89,6 +88,7 @@
       return {players,matches,standAll};
     }
 
+    // ---------------- UI ----------------
     function draw({players,matches,standAll}){
       const canEdit=!!API.key;
       const root=$("#root"); root.innerHTML="";
@@ -107,11 +107,11 @@
           </div>
         </header>`);
       root.appendChild(head);
-      head.querySelector("#saveCfg").onclick=(e)=>withLoading(e.currentTarget, async ()=>{
+      head.querySelector("#saveCfg").onclick=(e)=>spin(e.currentTarget, async ()=>{
         API.key=head.querySelector("#apiKey").value.trim(); await init();
       });
 
-      // Clasificación (igual que antes)
+      // ------ Clasificación ------
       const sel=T(`
         <div class="mb-3 flex items-center gap-3">
           <h2 class="text-lg font-semibold">Clasificación</h2>
@@ -189,7 +189,7 @@
 
       root.appendChild(T(`<div class="mt-8"></div>`));
 
-      // Crear partido (igual)
+      // ------ Crear partido ------
       const sec=T(`<section class="mb-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <h3 class="font-semibold mb-3">Crear Nuevo Partido</h3>
@@ -229,19 +229,19 @@
       });
 
       function buildShare(a1,a2,b1,b2,dtIso){
-        const P = id => players.find(p=>p.id===id)?.name||'¿?';
+        const Pn = id => players.find(p=>p.id===id)?.name||'¿?';
         const t = dtIso ? new Date(dtIso) : new Date();
         const end = new Date(t.getTime()+90*60*1000);
         const txt = `🎾 Partido de pádel
-Equipo A: ${P(a1)} + ${P(a2)}
-Equipo B: ${P(b1)} + ${P(b2)}
+Equipo A: ${Pn(a1)} + ${Pn(a2)}
+Equipo B: ${Pn(b1)} + ${Pn(b2)}
 Fecha: ${t.toLocaleString()}
 `;
-        const url = gcalUrl('Partido de pádel',`Equipo A: ${P(a1)} + ${P(a2)} | Equipo B: ${P(b1)} + ${P(b2)}`,t.toISOString(), end.toISOString());
+        const url = gcalUrl('Partido de pádel',`Equipo A: ${Pn(a1)} + ${Pn(a2)} | Equipo B: ${Pn(b1)} + ${Pn(b2)}`,t.toISOString(), end.toISOString());
         return { txt, url };
       }
 
-      sec.querySelector("#createMatch").onclick=(e)=>withLoading(e.currentTarget, async ()=>{
+      sec.querySelector("#createMatch").onclick=(e)=>spin(e.currentTarget, async ()=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
         if(selA.size!==2 || selB.size!==2) return alert("Cada equipo debe tener 2 jugadores.");
         const fecha=sec.querySelector("#fecha").value || new Date().toISOString();
@@ -264,109 +264,80 @@ Fecha: ${t.toLocaleString()}
         await init();
       });
 
-      // Título histórico
+      // -------- Histórico de partidos --------
       root.appendChild(T(`<h3 class="text-lg font-semibold mt-6 mb-2">Histórico de partidos</h3>`));
       const listWrap=T(`<div class="grid gap-3" id="matchesList"></div>`);
       root.appendChild(listWrap);
 
       const P = id => players.find(p=>p.id===id);
+      const statusPill = (fin) =>
+        fin ? `<span class="text-emerald-600">Finalizado</span>` : `<span class="text-amber-600">Pendiente</span>`;
+
+      const setRow=(id,idx,vals={a:0,b:0})=>{
+        const el=T(`<div class="flex items-center gap-3">
+          <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sa${idx}-${id}" value="${vals.a??0}">
+          <span class="text-center text-sm text-neutral-500 w-10">Set ${idx}</span>
+          <input type="number" min="0" class="w-16 text-center px-2 py-2 rounded-xl border border-neutral-300" id="sb${idx}-${id}" value="${vals.b??0}">
+        </div>`);
+        const mark=()=>{
+          const a=+el.querySelector(`#sa${idx}-${id}`).value||0;
+          const b=+el.querySelector(`#sb${idx}-${id}`).value||0;
+          el.querySelector(`#sa${idx}-${id}`).classList.toggle('cell-win', a>b);
+          el.querySelector(`#sb${idx}-${id}`).classList.toggle('cell-win', b>a);
+        };
+        el.oninput=mark; mark(); return el;
+      };
 
       const list=listWrap;
       if(matches.length===0) list.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
-
       matches.forEach(m=>{
         const a1=P(m.a1), a2=P(m.a2), b1=P(m.b1), b2=P(m.b2);
-
         const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <div class="flex items-center justify-between text-sm mb-1">
             <div class="text-neutral-500">${formatDT(m.date_iso)}</div>
-            <div class="${m.finalizado ? 'text-emerald-600' : 'text-amber-600'}">
-              ${m.finalizado ? "Finalizado" : "Pendiente"}
-            </div>
+            <div>${statusPill(m.finalizado)}</div>
           </div>
 
-          <!-- Cabecera equipos -->
-          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-2">
-            <div class="flex items-center gap-2 justify-start">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="flex items-center gap-2">
               ${miniAvatar(a1?.photo_base64||a1?.photo,a1?.name)} ${a1?.name||'¿?'} <span class="mx-1">+</span>
               ${miniAvatar(a2?.photo_base64||a2?.photo,a2?.name)} ${a2?.name||'¿?'}
             </div>
-            <div class="mx-2 font-semibold text-center">vs</div>
-            <div class="flex items-center gap-2 justify-start">
+            <div class="mx-3 font-semibold">vs</div>
+            <div class="flex items-center gap-2">
               ${miniAvatar(b1?.photo_base64||b1?.photo,b1?.name)} ${b1?.name||'¿?'} <span class="mx-1">+</span>
               ${miniAvatar(b2?.photo_base64||b2?.photo,b2?.name)} ${b2?.name||'¿?'}
             </div>
           </div>
 
-          <!-- Bloque de sets (diseño anterior, compacto y natural) -->
-<div class="grid gap-3">
-  <div class="grid grid-cols-[80px_auto_80px] items-center gap-x-4 gap-y-2">
-    <!-- Set 1 -->
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sa1-${m.id}" value="${m.s1a??0}">
-    <span class="text-sm text-neutral-500">Set 1</span>
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sb1-${m.id}" value="${m.s1b??0}">
+          <div class="grid md:grid-cols-[1fr_420px] gap-6 items-start">
+            <div class="grid gap-2">
+              ${setRow(m.id,1,{a:m.s1a,b:m.s1b}).outerHTML}
+              ${setRow(m.id,2,{a:m.s2a,b:m.s2b}).outerHTML}
+              ${setRow(m.id,3,{a:m.s3a,b:m.s3b}).outerHTML}
+              <div class="flex items-center gap-2">
+                <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
+                <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
+              </div>
+            </div>
 
-    <!-- Set 2 -->
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sa2-${m.id}" value="${m.s2a??0}">
-    <span class="text-sm text-neutral-500">Set 2</span>
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sb2-${m.id}" value="${m.s2b??0}">
-
-    <!-- Set 3 -->
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sa3-${m.id}" value="${m.s3a??0}">
-    <span class="text-sm text-neutral-500">Set 3</span>
-    <input type="number" min="0"
-      class="w-20 text-center px-2 py-2 rounded-xl border border-neutral-300"
-      id="sb3-${m.id}" value="${m.s3b??0}">
-  </div>
-
-  <div class="flex items-center gap-2 mt-1">
-    <button class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}" id="close-${m.id}">Cerrar resultado</button>
-    <button class="btn-soft" id="del-${m.id}">Eliminar partido</button>
-  </div>
-</div>
-
-
-            <!-- Bloque foto+comentario a la derecha -->
-            <div class="grid gap-2 justify-items-end">
-              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-w-[280px] max-h-[220px] object-cover"/>`:''}
+            <div class="grid gap-2">
+              ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-w-[420px] max-h-[240px] object-cover"/>`:''}
               ${!m.finalizado ? `
                 <div class="flex items-center gap-2">
                   <input type="file" id="ph-${m.id}" accept="image/*" class="text-sm">
                   <button class="btn-soft" id="up-${m.id}">Subir foto</button>
                 </div>
               `:''}
-              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full md:w-[380px] min-h-[84px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
+              <textarea id="com-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[96px]" placeholder="Comentario" ${canEdit?'':'disabled'}>${m.comment||''}</textarea>
             </div>
           </div>
         </div>`);
 
-        // resaltar ganador de cada set
-        function mark(id,i){
-          const a=+card.querySelector(`#sa${i}-${id}`).value||0;
-          const b=+card.querySelector(`#sb${i}-${id}`).value||0;
-          card.querySelector(`#sa${i}-${id}`).classList.toggle('cell-win', a>b);
-          card.querySelector(`#sb${i}-${id}`).classList.toggle('cell-win', b>a);
-        }
-        [1,2,3].forEach(i=>{
-          card.querySelector(`#sa${i}-${m.id}`).oninput=()=>mark(m.id,i);
-          card.querySelector(`#sb${i}-${m.id}`).oninput=()=>mark(m.id,i);
-          mark(m.id,i);
-        });
-
         // Subir foto
         const upBtn = card.querySelector(`#up-${m.id}`);
         if(upBtn){
-          upBtn.onclick=(e)=>withLoading(e.currentTarget, async()=>{
+          upBtn.onclick=(e)=>spin(e.currentTarget, async()=>{
             if(!canEdit) return alert("Introduce la clave de edición.");
             const f=card.querySelector(`#ph-${m.id}`).files?.[0];
             if(!f) return alert('Selecciona una imagen.');
@@ -377,7 +348,7 @@ Fecha: ${t.toLocaleString()}
         }
 
         // Cerrar resultado
-        card.querySelector(`#close-${m.id}`).onclick=(e)=>withLoading(e.currentTarget, async()=>{
+        card.querySelector(`#close-${m.id}`).onclick=(e)=>spin(e.currentTarget, async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           const s = [1,2,3].map(i=>({
             a:Number(card.querySelector(`#sa${i}-${m.id}`).value)||0,
@@ -388,7 +359,7 @@ Fecha: ${t.toLocaleString()}
         });
 
         // Eliminar partido (contraseña oculta)
-        card.querySelector(`#del-${m.id}`).onclick=(e)=>withLoading(e.currentTarget, async()=>{
+        card.querySelector(`#del-${m.id}`).onclick=(e)=>spin(e.currentTarget, async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           const pass = prompt('Escribe la contraseña para eliminar');
           if(!pass) return;
@@ -401,7 +372,7 @@ Fecha: ${t.toLocaleString()}
         list.appendChild(card);
       });
 
-      // -------- Gestión de jugadores --------
+      // ------ Gestión de jugadores ------
       const secP=T(`<section class="mt-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <h3 class="font-semibold mb-3">Añadir jugador/a</h3>
@@ -418,7 +389,7 @@ Fecha: ${t.toLocaleString()}
       </section>`);
       root.appendChild(secP);
 
-      secP.querySelector("#add").onclick=(e)=>withLoading(e.currentTarget, async()=>{
+      secP.querySelector("#add").onclick=(e)=>spin(e.currentTarget, async()=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
         const name=secP.querySelector("#name").value.trim();
         const alias=secP.querySelector("#alias").value.trim();
@@ -444,7 +415,7 @@ Fecha: ${t.toLocaleString()}
           </div>
           <button data-id="${j.id}" class="text-sm btn-soft">Eliminar</button>
         </li>`);
-        row.querySelector(`#save-${j.id}`).onclick=(e)=>withLoading(e.currentTarget, async()=>{
+        row.querySelector(`#save-${j.id}`).onclick=(e)=>spin(e.currentTarget, async()=>{
           if(!canEdit) return;
           const name=row.querySelector(`#nn-${j.id}`).value.trim();
           const alias=row.querySelector(`#na-${j.id}`).value.trim();
@@ -454,7 +425,7 @@ Fecha: ${t.toLocaleString()}
           alert('Cambios guardados ✅');
           await init();
         });
-        row.querySelector("button[data-id]").onclick=(e)=>withLoading(e.currentTarget, async()=>{
+        row.querySelector("button[data-id]").onclick=(e)=>spin(e.currentTarget, async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           if(!confirm("Eliminar jugador/a?")) return;
           await API.post('/.netlify/functions/delete-player',{id:j.id});
@@ -476,6 +447,7 @@ Fecha: ${t.toLocaleString()}
     }
     init();
 
+    // PWA
     if('serviceWorker' in navigator){
       window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
     }
