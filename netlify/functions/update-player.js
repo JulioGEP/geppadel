@@ -31,13 +31,11 @@ export default async (req) => {
       return json(req, { error: 'nothing-to-update' }, 400);
     }
 
-    params.push(id); // para el WHERE
-    const q = `UPDATE players SET ${sets.join(', ')} WHERE id = $${params.length}`;
+    params.push(id);
+    const q = `UPDATE players SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING id,name,alias,photo_base64`;
 
-    // Ejecuta el UPDATE con parámetros de forma segura
-    await sql.unsafe(q, params);
-
-    return json(req, { ok: true });
+    const rows = await sql.unsafe(q, params);
+    return json(req, { ok: true, player: rows?.[0] || null });
   } catch (e) {
     return json(req, { error: 'update-failed', details: String(e.message || e) }, 500);
   }
