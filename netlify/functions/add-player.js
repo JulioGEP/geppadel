@@ -8,9 +8,10 @@ export default async (req) => {
   const body = await req.json().catch(()=>({}));
   const name = (body.name || '').trim();
   const alias = (body.alias || '').trim();
+  const photo = (body.photo_base64 || null);
   if (!name) return json(req, { error: 'name-required' }, 400);
 
   const id = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
-  await sql`INSERT INTO players (id, name, alias) VALUES (${id}, ${name}, ${alias || null})`;
-  return json(req, { id, name, alias });
+  await sql`INSERT INTO players (id, name, alias, photo_base64) VALUES (${id}, ${name}, ${alias || null}, ${photo})`;
+  return json(req, { id, name, alias, photo_base64: photo });
 }
