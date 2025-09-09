@@ -11,30 +11,34 @@ export default async (req) => {
     const { id } = b;
     if (!id) return json(req, { error: 'id-required' }, 400);
 
-    const fields = [];
+    const sets = [];
+    const params = [];
 
-    if (typeof b.name === 'string') {
-      const v = b.name.trim();
-      if (v) fields.push(sql`name = ${v}`);
+    if (typeof b.name === 'string' && b.name.trim()) {
+      sets.push(`name = $${params.length + 1}`);
+      params.push(b.name.trim());
     }
     if (typeof b.alias === 'string') {
-      const v = b.alias.trim();
-      fields.push(sql`alias = ${v || null}`);
+      sets.push(`alias = $${params.length + 1}`);
+      params.push(b.alias.trim() || null);
     }
     if (typeof b.photo_base64 === 'string') {
-      fields.push(sql`photo_base64 = ${b.photo_base64 || null}`);
+      sets.push(`photo_base64 = $${params.length + 1}`);
+      params.push(b.photo_base64 || null);
     }
 
-    if (fields.length === 0) {
+    if (sets.length === 0) {
       return json(req, { error: 'nothing-to-update' }, 400);
     }
 
-    // ¡OJO! hay que unir con comas:
-    await sql`UPDATE players SET ${sql.join(fields, sql`, `)} WHERE id = ${id}`;
+    params.push(id); // para el WHERE
+    const q = `UPDATE players SET ${sets.join(', ')} WHERE id = $${params.length}`;
+
+    // Ejecuta el UPDATE con parámetros de forma segura
+    await sql.unsafe(q, params);
 
     return json(req, { ok: true });
   } catch (e) {
-    // Para que Netlify no devuelva respuesta vacía
     return json(req, { error: 'update-failed', details: String(e.message || e) }, 500);
   }
 };
