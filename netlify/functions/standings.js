@@ -1,39 +1,87 @@
 import { sql } from './_common/db.js';
 import { json, preflight } from './_common/http.js';
 
-function points(a,b){
-  const ok = (a===3&&b===0)||(a===0&&b===3)||(a===2&&b===1)||(a===1&&b===2);
-  if(!ok) return null;
-  if((a===3&&b===0)||(a===0&&b===3)) return {A:a>b?3:0,B:b>a?3:0};
-  return {A:a>b?2:1,B:b>a?2:1};
-}
+const sumSetsGames = (m) => {
+  // Si vienen de legado (solo sets_a/sets_b), no hay juegos
+  const sets = [
+    { a: m.s1a ?? 0, b: m.s1b ?? 0 },
+    { a: m.s2a ?? 0, b: m.s2b ?? 0 },
+    { a: m.s3a ?? 0, b: m.s3b ?? 0 },
+  ];
+  let sa=0, sb=0, ga=0, gb=0;
+  sets.forEach((s,i)=>{
+    if (i===2 && s.a===0 && s.b===0) return;
+    ga+=s.a; gb+=s.b; if (s.a>s.b) sa++; else if (s.b>s.a) sb++;
+  });
+  // Fallback a sets_a/sets_b si no hay juegos
+  if (ga+gb===0 && (m.sets_a!=null || m.sets_b!=null)) { sa = m.sets_a|0; sb = m.sets_b|0; }
+  return { sa, sb, ga, gb };
+};
 
 export default async (req) => {
   const p = preflight(req); if (p) return p;
-  const players = await sql`SELECT id, name, alias FROM players`;
-  const matches = await sql`SELECT a1,a2,b1,b2,sets_a,sets_b,finalizado FROM matches WHERE finalizado=true`;
 
-  const table = new Map();
-  for(const pl of players) table.set(pl.id, {id:pl.id,name:pl.name,alias:pl.alias||'',puntos:0,pj:0,pg:0,pp:0});
+  const players = await sql`SELECT id, name, alias, photo_base64 FROM players`;
+  const pMap = new Map(players.map(p=>[p.id,p]));
 
-  for(const m of matches){
-    const s = points(m.sets_a, m.sets_b);
-    if(!s) continue;
-    const add=(id,k,v=1)=>{ if(id && table.has(id)) table.get(id)[k]+=v; };
-    const addP=(id,v)=>{ if(id && table.has(id)) table.get(id).puntos+=v; };
+  const matches = await sql`SELECT a1,a2,b1,b2,sets_a,sets_b,s1a,s1b,s2a,s2b,s3a,s3b,finalizado FROM matches WHERE finalizado=true`;
 
-    [m.a1,m.a2,m.b1,m.b2].forEach(id=>add(id,'pj',1));
-    const aWins = m.sets_a > m.sets_b;
+  // Individual
+  const ind = new Map();
+  players.forEach(pl => ind.set(pl.id, { id:pl.id, name:pl.name, alias:pl.alias||'', photo:pl.photo_base64||'', puntos:0, juegos:0, pj:0, pg:0, pp:0 }));
 
-    if(aWins){
-      [m.a1,m.a2].forEach(id=>{ add(id,'pg'); addP(id,s.A); });
-      [m.b1,m.b2].forEach(id=>{ add(id,'pp'); addP(id,s.B); });
-    }else{
-      [m.b1,m.b2].forEach(id=>{ add(id,'pg'); addP(id,s.B); });
-      [m.a1,m.a2].forEach(id=>{ add(id,'pp'); addP(id,s.A); });
+  // Parejas
+  const pairKey = (x,y)=>[x,y].sort().join('|');
+  const pairs = new Map();
+
+  for (const m of matches) {
+    const { sa, sb, ga, gb } = sumSetsGames(m);
+    const aWins = sa>sb, bWins = sb>sa;
+    const A = [m.a1,m.a2].filter(Boolean);
+    const B = [m.b1,m.b2].filter(Boolean);
+    // PJ
+    A.forEach(id=>{ if(ind.has(id)) ind.get(id).pj++; });
+    B.forEach(id=>{ if(ind.has(id)) ind.get(id).pj++; });
+    // PG/PP
+    if (aWins) { A.forEach(id=>ind.get(id).pg++); B.forEach(id=>ind.get(id).pp++); }
+    else if (bWins) { B.forEach(id=>ind.get(id).pg++); A.forEach(id=>ind.get(id).pp++); }
+    // Puntos (sets) + juegos
+    A.forEach(id=>{ ind.get(id).puntos += sa; ind.get(id).juegos += ga; });
+    B.forEach(id=>{ ind.get(id).puntos += sb; ind.get(id).juegos += gb; });
+
+    // Parejas
+    if (A.length===2) {
+      const k = pairKey(A[0],A[1]);
+      if (!pairs.has(k)) {
+        const p1=pMap.get(A[0])||{}, p2=pMap.get(A[1])||{};
+        pairs.set(k, { key:k,
+          a:A[0], b:A[1],
+          name:`${p1.name||'?'} + ${p2.name||'?'}`,
+          photos:[p1.photo_base64||'', p2.photo_base64||''],
+          puntos:0, juegos:0, pj:0, pg:0, pp:0
+        });
+      }
+      const row=pairs.get(k); row.pj++; row.puntos+=sa; row.juegos+=ga; if (aWins) row.pg++; else if (bWins) row.pp++;
+    }
+    if (B.length===2) {
+      const k = pairKey(B[0],B[1]);
+      if (!pairs.has(k)) {
+        const p1=pMap.get(B[0])||{}, p2=pMap.get(B[1])||{};
+        pairs.set(k, { key:k,
+          a:B[0], b:B[1],
+          name:`${p1.name||'?'} + ${p2.name||'?'}`,
+          photos:[p1.photo_base64||'', p2.photo_base64||''],
+          puntos:0, juegos:0, pj:0, pg:0, pp:0
+        });
+      }
+      const row=pairs.get(k); row.pj++; row.puntos+=sb; row.juegos+=gb; if (bWins) row.pg++; else if (aWins) row.pp++;
     }
   }
 
-  const rows = Array.from(table.values()).sort((a,b)=> b.puntos-a.puntos || b.pg-a.pg || a.pp-b.pp);
-  return json(req, rows);
+  const individual = Array.from(ind.values())
+    .sort((a,b)=> b.puntos-a.puntos || b.juegos-a.juegos || b.pg-a.pg || a.pp-b.pp || a.name.localeCompare(b.name));
+  const parejas = Array.from(pairs.values())
+    .sort((a,b)=> b.puntos-a.puntos || b.juegos-a.juegos || b.pg-a.pg || a.pp-b.pp || a.name.localeCompare(b.name));
+
+  return json(req, { individual, parejas });
 }
