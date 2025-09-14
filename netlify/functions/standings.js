@@ -28,7 +28,18 @@ export default async (req) => {
 
   // Individual
   const ind = new Map();
-  players.forEach(pl => ind.set(pl.id, { id:pl.id, name:pl.name, alias:pl.alias||'', photo:pl.photo_base64||'', puntos:0, juegos:0, pj:0, pg:0, pp:0 }));
+  players.forEach(pl => ind.set(pl.id, {
+    id:pl.id,
+    name:pl.name,
+    alias:pl.alias||'',
+    photo:pl.photo_base64||'',
+    puntos:0,
+    jg:0,
+    jp:0,
+    pj:0,
+    pg:0,
+    pp:0
+  }));
 
   // Parejas
   const pairKey = (x,y)=>[x,y].sort().join('|');
@@ -45,9 +56,19 @@ export default async (req) => {
     // PG/PP
     if (aWins) { A.forEach(id=>ind.get(id).pg++); B.forEach(id=>ind.get(id).pp++); }
     else if (bWins) { B.forEach(id=>ind.get(id).pg++); A.forEach(id=>ind.get(id).pp++); }
-    // Puntos (sets) + juegos
-    A.forEach(id=>{ ind.get(id).puntos += sa; ind.get(id).juegos += ga; });
-    B.forEach(id=>{ ind.get(id).puntos += sb; ind.get(id).juegos += gb; });
+    // Puntos (sets) + juegos ganados/perdidos
+    A.forEach(id=>{
+      const r = ind.get(id);
+      r.puntos += sa;
+      r.jg += ga;
+      r.jp += gb;
+    });
+    B.forEach(id=>{
+      const r = ind.get(id);
+      r.puntos += sb;
+      r.jg += gb;
+      r.jp += ga;
+    });
 
     // Parejas
     if (A.length===2) {
@@ -58,10 +79,16 @@ export default async (req) => {
           a:A[0], b:A[1],
           name:`${p1.name||'?'} + ${p2.name||'?'}`,
           photos:[p1.photo_base64||'', p2.photo_base64||''],
-          puntos:0, juegos:0, pj:0, pg:0, pp:0
+          puntos:0, jg:0, jp:0, pj:0, pg:0, pp:0
         });
       }
-      const row=pairs.get(k); row.pj++; row.puntos+=sa; row.juegos+=ga; if (aWins) row.pg++; else if (bWins) row.pp++;
+      const row=pairs.get(k);
+      row.pj++;
+      row.puntos+=sa;
+      row.jg+=ga;
+      row.jp+=gb;
+      if (aWins) row.pg++;
+      else if (bWins) row.pp++;
     }
     if (B.length===2) {
       const k = pairKey(B[0],B[1]);
@@ -71,17 +98,37 @@ export default async (req) => {
           a:B[0], b:B[1],
           name:`${p1.name||'?'} + ${p2.name||'?'}`,
           photos:[p1.photo_base64||'', p2.photo_base64||''],
-          puntos:0, juegos:0, pj:0, pg:0, pp:0
+          puntos:0, jg:0, jp:0, pj:0, pg:0, pp:0
         });
       }
-      const row=pairs.get(k); row.pj++; row.puntos+=sb; row.juegos+=gb; if (bWins) row.pg++; else if (aWins) row.pp++;
+      const row=pairs.get(k);
+      row.pj++;
+      row.puntos+=sb;
+      row.jg+=gb;
+      row.jp+=ga;
+      if (bWins) row.pg++;
+      else if (aWins) row.pp++;
     }
   }
 
   const individual = Array.from(ind.values())
-    .sort((a,b)=> b.puntos-a.puntos || b.juegos-a.juegos || b.pg-a.pg || a.pp-b.pp || a.name.localeCompare(b.name));
+    .sort((a,b)=>
+      b.puntos - a.puntos ||
+      (b.jg - b.jp) - (a.jg - a.jp) ||
+      b.jg - a.jg ||
+      b.pg - a.pg ||
+      a.pp - b.pp ||
+      a.name.localeCompare(b.name)
+    );
   const parejas = Array.from(pairs.values())
-    .sort((a,b)=> b.puntos-a.puntos || b.juegos-a.juegos || b.pg-a.pg || a.pp-b.pp || a.name.localeCompare(b.name));
+    .sort((a,b)=>
+      b.puntos - a.puntos ||
+      (b.jg - b.jp) - (a.jg - a.jp) ||
+      b.jg - a.jg ||
+      b.pg - a.pg ||
+      a.pp - b.pp ||
+      a.name.localeCompare(b.name)
+    );
 
   return json(req, { individual, parejas });
 }
