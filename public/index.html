@@ -132,19 +132,23 @@
                <th class="px-4 py-3 text-left">#</th>
                <th class="px-4 py-3 text-left">Jugador/a</th>
                <th class="px-4 py-3 text-center">Puntos (sets)</th>
-               <th class="px-4 py-3 text-center">Juegos</th>
                <th class="px-4 py-3 text-center">PJ</th>
                <th class="px-4 py-3 text-center">PG</th>
                <th class="px-4 py-3 text-center">PP</th>
+               <th class="px-4 py-3 text-center">JG</th>
+               <th class="px-4 py-3 text-center">JP</th>
+               <th class="px-4 py-3 text-center">Dif</th>
              </tr></thead>`
           : `<thead class="bg-neutral-50"><tr>
                <th class="px-4 py-3 text-left">#</th>
                <th class="px-4 py-3 text-left">Pareja</th>
                <th class="px-4 py-3 text-center">Puntos (sets)</th>
-               <th class="px-4 py-3 text-center">Juegos</th>
                <th class="px-4 py-3 text-center">PJ</th>
                <th class="px-4 py-3 text-center">PG</th>
                <th class="px-4 py-3 text-center">PP</th>
+               <th class="px-4 py-3 text-center">JG</th>
+               <th class="px-4 py-3 text-center">JP</th>
+               <th class="px-4 py-3 text-center">Dif</th>
              </tr></thead>`;
 
         const tbody = document.createElement('tbody');
@@ -155,10 +159,12 @@
                  <td class="px-4 py-3 font-medium">${i+1}</td>
                  <td class="px-4 py-3 flex items-center gap-2">${miniAvatar((r.photo_base64||r.photo),r.name)} ${r.name}${r.alias?` <span class="text-neutral-500">(${r.alias})</span>`:''}</td>
                  <td class="px-4 py-3 font-semibold text-center">${r.puntos}</td>
-                 <td class="px-4 py-3 text-center">${r.juegos}</td>
                  <td class="px-4 py-3 text-center">${r.pj}</td>
                  <td class="px-4 py-3 text-center">${r.pg}</td>
                  <td class="px-4 py-3 text-center">${r.pp}</td>
+                 <td class="px-4 py-3 text-center">${r.jg}</td>
+                 <td class="px-4 py-3 text-center">${r.jp}</td>
+                 <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
                </tr>`
             ));
           }else{
@@ -171,10 +177,12 @@
                     <span class="ml-2">${r.name}</span>
                  </td>
                  <td class="px-4 py-3 font-semibold text-center">${r.puntos}</td>
-                 <td class="px-4 py-3 text-center">${r.juegos}</td>
                  <td class="px-4 py-3 text-center">${r.pj}</td>
                  <td class="px-4 py-3 text-center">${r.pg}</td>
                  <td class="px-4 py-3 text-center">${r.pp}</td>
+                 <td class="px-4 py-3 text-center">${r.jg}</td>
+                 <td class="px-4 py-3 text-center">${r.jp}</td>
+                 <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
                </tr>`
             ));
           }
