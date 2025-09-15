@@ -60,14 +60,6 @@
       return canvas.toDataURL('image/jpeg', quality);
     }
 
-    const toGCalDate = iso => new Date(iso).toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-    const gcalUrl = (title, details, startISO, endISO, location='') => {
-      const s=toGCalDate(startISO), e=toGCalDate(endISO);
-      const q = new URLSearchParams({ action:'TEMPLATE', text:title, details, location, dates:`${s}/${e}` });
-      return `https://calendar.google.com/calendar/render?${q}`;
-    };
-    const copy = async (text)=>{ try{ await navigator.clipboard.writeText(text); alert('Texto copiado ✅'); }catch(e){ prompt('Copia manualmente:', text); } };
-
     async function spin(btn, task) {
       if (!btn) return task();
       const html = btn.innerHTML;
@@ -215,7 +207,6 @@
           <textarea id="coment" class="mt-3 px-3 py-2 rounded-xl border border-neutral-300 w-full min-h-[80px]" placeholder="Comentarios"></textarea>
           <div class="mt-3 flex items-center gap-2">
             <button id="createMatch" class="${canEdit?'btn-dark':'btn-soft text-neutral-400 cursor-not-allowed'}">Crear Nuevo Partido</button>
-            <div id="shareBox" class="hidden text-sm text-neutral-600"></div>
           </div>
         </div>
       </section>`);
@@ -240,19 +231,6 @@
         teamA.appendChild(a); teamB.appendChild(b);
       });
 
-      function buildShare(a1,a2,b1,b2,dtIso){
-        const Pn = id => players.find(p=>p.id===id)?.name||'¿?';
-        const t = dtIso ? new Date(dtIso) : new Date();
-        const end = new Date(t.getTime()+90*60*1000);
-        const txt = `🎾 Partido de pádel
-Equipo A: ${Pn(a1)} + ${Pn(a2)}
-Equipo B: ${Pn(b1)} + ${Pn(b2)}
-Fecha: ${t.toLocaleString()}
-`;
-        const url = gcalUrl('Partido de pádel',`Equipo A: ${Pn(a1)} + ${Pn(a2)} | Equipo B: ${Pn(b1)} + ${Pn(b2)}`,t.toISOString(), end.toISOString());
-        return { txt, url };
-      }
-
       sec.querySelector("#createMatch").onclick=(e)=>spin(e.currentTarget, async ()=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
         if(selA.size!==2 || selB.size!==2) return alert("Cada equipo debe tener 2 jugadores.");
@@ -260,19 +238,6 @@ Fecha: ${t.toLocaleString()}
         const coment=sec.querySelector("#coment").value.trim();
         const [a1,a2]=[...selA], [b1,b2]=[...selB];
         await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1,a2,b1,b2,comment:coment});
-        const share = buildShare(a1,a2,b1,b2,fecha);
-        const box = sec.querySelector('#shareBox');
-        box.classList.remove('hidden');
-        box.innerHTML = `
-          <div class="p-2 rounded-lg bg-neutral-100">
-            <div class="mb-1 font-medium">Compartir:</div>
-            <textarea class="w-full text-sm p-2 border rounded-lg mb-2" rows="3">${share.txt}</textarea>
-            <div class="flex items-center gap-2">
-              <button id="copyShare" class="btn-soft">Copiar texto</button>
-              <a class="btn-soft" href="${share.url}" target="_blank" rel="noopener">Añadir a Google Calendar</a>
-            </div>
-          </div>`;
-        box.querySelector('#copyShare').onclick=()=>copy(share.txt);
         await init();
       });
 
