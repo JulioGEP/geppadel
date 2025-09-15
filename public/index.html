@@ -138,6 +138,7 @@
                <th class="px-4 py-3 text-center">JG</th>
                <th class="px-4 py-3 text-center">JP</th>
                <th class="px-4 py-3 text-center">Dif</th>
+               <th class="px-4 py-3 text-center">GEPTomic</th>
              </tr></thead>`
           : `<thead class="bg-neutral-50"><tr>
                <th class="px-4 py-3 text-left">#</th>
@@ -149,6 +150,7 @@
                <th class="px-4 py-3 text-center">JG</th>
                <th class="px-4 py-3 text-center">JP</th>
                <th class="px-4 py-3 text-center">Dif</th>
+               <th class="px-4 py-3 text-center">GEPTomic</th>
              </tr></thead>`;
 
         const tbody = document.createElement('tbody');
@@ -165,6 +167,7 @@
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
                  <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
+                 <td class="px-4 py-3 text-center">${r.geptomic}</td>
                </tr>`
             ));
           }else{
@@ -183,6 +186,7 @@
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
                  <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
+                 <td class="px-4 py-3 text-center">${r.geptomic}</td>
                </tr>`
             ));
           }
