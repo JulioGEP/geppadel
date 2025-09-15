@@ -40,12 +40,31 @@
 
     // ---------------- Utils ----------------
     const AVA_FALLBACK = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAALElEQVQokWP8//8/AyWYgQEDYwMDA2EQJgZoYQxUM0GMg0GG0wGJQGgYAAAUyQJ0T+eG9wAAAABJRU5ErkJggg==';
+    const COURTS = [
+      { id:'padel1', name:'Padel 1 Sabadell', email:'info@padel1.com' },
+      { id:'test', name:'Pista Test', email:'julio@gepgroup.es' },
+    ];
+    const escAttr = (v='') => String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 
     function miniAvatar(ph,name){
       const src = ph || '/icon-192.png';
       return `<img class="avatar" src="${src}" onerror="this.src='${AVA_FALLBACK}'" alt="${name||''}" />`;
     }
     const formatDT = iso => iso ? new Date(iso).toLocaleString() : 'Sin fecha';
+    const formatDateParts = (iso) => {
+      if (!iso) {
+        const now = new Date();
+        return {
+          date: now.toLocaleDateString('es-ES', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
+          time: now.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })
+        };
+      }
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString('es-ES', { weekday:'long', year:'numeric', month:'long', day:'numeric' }),
+        time: d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })
+      };
+    };
 
     async function compressImage(file, maxW = 1200, quality = 0.85){
       const img = new Image();
@@ -69,6 +88,51 @@
       btn.innerHTML = `<img src="./icon-192.png" class="h-5 w-5 animate-spin mx-auto" alt="">`;
       try { return await task(); }
       finally { btn.disabled = false; btn.style.width=''; btn.innerHTML = html; }
+    }
+
+    const parseError = (err) => {
+      if (!err) return 'Error desconocido';
+      const raw = err.message || err.toString();
+      try {
+        const data = JSON.parse(raw);
+        if (data && data.error) return data.error;
+      } catch (_) {}
+      return raw || 'Error desconocido';
+    };
+
+    function openTextModal({ title, defaultValue, confirmLabel = 'Enviar' }) {
+      return new Promise((resolve) => {
+        const modal = T(`
+          <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl p-5 grid gap-3">
+              <h3 class="text-lg font-semibold">${title}</h3>
+              <textarea class="border rounded-xl px-3 py-2 min-h-[180px]" data-modal-text></textarea>
+              <div class="flex justify-end gap-2">
+                <button type="button" class="btn-soft" data-modal-cancel>Cancelar</button>
+                <button type="button" class="btn-dark" data-modal-ok>${confirmLabel}</button>
+              </div>
+            </div>
+          </div>`);
+        const textarea = modal.querySelector('[data-modal-text]');
+        textarea.value = defaultValue || '';
+        const onKey = (ev) => {
+          if (ev.key === 'Escape') {
+            ev.preventDefault();
+            cleanup(null);
+          }
+        };
+        const cleanup = (val) => {
+          document.removeEventListener('keydown', onKey);
+          modal.remove();
+          resolve(val);
+        };
+        modal.querySelector('[data-modal-cancel]').onclick = () => cleanup(null);
+        modal.querySelector('[data-modal-ok]').onclick = () => cleanup(textarea.value.trim());
+        modal.addEventListener('click', (ev) => { if (ev.target === modal) cleanup(null); });
+        document.addEventListener('keydown', onKey);
+        document.body.appendChild(modal);
+        setTimeout(()=>textarea.focus(), 30);
+      });
     }
 
     async function loadAll(){
@@ -194,11 +258,16 @@
       root.appendChild(T(`<div class="mt-8"></div>`));
 
       // ------ Crear partido ------
+      const courtOptions = COURTS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
       const sec=T(`<section class="mb-6 grid gap-4">
         <div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <h3 class="font-semibold mb-3">Crear Nuevo Partido</h3>
           <div class="grid md:grid-cols-2 gap-3">
             <input id="fecha" type="datetime-local" class="px-3 py-2 rounded-xl border border-neutral-300" />
+            <select id="court" class="px-3 py-2 rounded-xl border border-neutral-300">
+              <option value="">Selecciona pista</option>
+              ${courtOptions}
+            </select>
           </div>
           <div class="grid md:grid-cols-2 gap-3 mt-3">
             <div><div class="text-sm text-neutral-500 mb-1">Equipo A (2 jugadores)</div><div id="teamA" class="grid grid-cols-2 gap-2"></div></div>
@@ -231,15 +300,24 @@
         teamA.appendChild(a); teamB.appendChild(b);
       });
 
-      sec.querySelector("#createMatch").onclick=(e)=>spin(e.currentTarget, async ()=>{
+      sec.querySelector("#createMatch").onclick=async (ev)=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
         if(selA.size!==2 || selB.size!==2) return alert("Cada equipo debe tener 2 jugadores.");
+        const courtSel = sec.querySelector("#court");
+        const court = COURTS.find(c=>c.id===courtSel.value);
+        if(!court) return alert("Selecciona una pista.");
         const fecha=sec.querySelector("#fecha").value || new Date().toISOString();
         const coment=sec.querySelector("#coment").value.trim();
         const [a1,a2]=[...selA], [b1,b2]=[...selB];
-        await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1,a2,b1,b2,comment:coment});
-        await init();
-      });
+        try {
+          await spin(ev.currentTarget, async ()=>{
+            await API.post('/.netlify/functions/create-match',{dateISO:fecha,a1,a2,b1,b2,comment:coment,court_name:court.name,court_email:court.email});
+          });
+          await init();
+        } catch(err) {
+          alert(`No se pudo crear el partido: ${parseError(err)}`);
+        }
+      };
 
       // -------- Histórico de partidos --------
       root.appendChild(T(`<h3 class="text-lg font-semibold mt-6 mb-2">Histórico de partidos</h3>`));
@@ -299,6 +377,19 @@
             </div>
 
             <div class="grid gap-2">
+              <div class="text-sm text-neutral-600">
+                ${m.court_name
+                  ? `<span class="font-medium">Pista:</span> ${m.court_name}${m.court_email?` • <a class="text-blue-600 hover:underline" href="mailto:${m.court_email}">${m.court_email}</a>`:''}`
+                  : '<span class="text-amber-600 font-medium">Pista pendiente de asignar</span>'}
+              </div>
+              ${(!m.finalizado && m.reservation_sent)?`<div class="text-xs font-medium text-emerald-600">Reserva Pista Enviada</div>`:''}
+              ${(!m.finalizado && m.calendar_sent)?`<div class="text-xs font-medium text-sky-600">Invitaciones enviadas</div>`:''}
+              ${!m.finalizado ? `
+                <div class="flex flex-wrap gap-2">
+                  <button class="btn-soft" id="reserve-${m.id}">Reservar</button>
+                  <button class="btn-soft" id="calendar-${m.id}">Enviar Calendar</button>
+                </div>
+              `:''}
               ${m.photo_base64?`<img src="${m.photo_base64}" class="rounded-xl border max-w-[420px] max-h-[240px] object-cover"/>`:''}
               ${!m.finalizado ? `
                 <div class="flex items-center gap-2">
@@ -310,6 +401,58 @@
             </div>
           </div>
         </div>`);
+
+        const reserveBtn = card.querySelector(`#reserve-${m.id}`);
+        if(reserveBtn){
+          reserveBtn.onclick=async (ev)=>{
+            if(!canEdit) return alert("Introduce la clave de edición.");
+            if(!m.court_email){
+              alert('No hay correo de pista configurado.');
+              return;
+            }
+            const { date, time } = formatDateParts(m.date_iso);
+            const defaultMsg = `¡Hola!\n\nNos gustaría reservar una pista para el día ${date} y la hora ${time}.\nSi tenéis espacio, nos podrías confirmar el número de pista por favor.\nLa reserva la ponemos a nombre de Julio de GEP (es el nombre de la empresa)\n\nMuchas gracias por adelantado.`;
+            const message = await openTextModal({ title: 'Correo de reserva', defaultValue: defaultMsg, confirmLabel: 'Enviar correo' });
+            if(!message) return;
+            try {
+              await spin(ev.currentTarget, async ()=>{
+                await API.post('/.netlify/functions/send-reservation',{ matchId:m.id, message });
+              });
+              alert('Correo enviado ✅');
+              await init();
+            } catch(err) {
+              alert(`No se pudo enviar el correo: ${parseError(err)}`);
+            }
+          };
+        }
+
+        const calendarBtn = card.querySelector(`#calendar-${m.id}`);
+        if(calendarBtn){
+          calendarBtn.onclick=async (ev)=>{
+            if(!canEdit) return alert("Introduce la clave de edición.");
+            const emailPlayers=[a1,a2,b1,b2].map(P).filter(p=>p && p.email);
+            if(emailPlayers.length===0){
+              alert('Ningún participante tiene email configurado.');
+              return;
+            }
+            if(!m.reservation_sent){
+              const ok = confirm('¿Tenéis la pista reservada ya?');
+              if(!ok){
+                alert('No se enviará hasta que no haya pista.');
+                return;
+              }
+            }
+            try {
+              await spin(ev.currentTarget, async ()=>{
+                await API.post('/.netlify/functions/send-calendar',{ matchId:m.id });
+              });
+              alert('Invitaciones enviadas ✅');
+              await init();
+            } catch(err) {
+              alert(`No se pudieron enviar las invitaciones: ${parseError(err)}`);
+            }
+          };
+        }
 
         // Subir foto
         const upBtn = card.querySelector(`#up-${m.id}`);
@@ -356,6 +499,7 @@
           <div class="flex flex-col md:flex-row gap-2">
             <input id="name" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Nombre y apellidos" />
             <input id="alias" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Alias (opcional)" />
+            <input id="email" type="email" class="flex-1 px-3 py-2 rounded-xl border border-neutral-300" placeholder="Email (opcional)" />
             <button id="add" class="${canEdit?'btn-dark':'btn-soft text-neutral-400'}">Añadir</button>
           </div>
         </div>
@@ -366,14 +510,21 @@
       </section>`);
       root.appendChild(secP);
 
-      secP.querySelector("#add").onclick=(e)=>spin(e.currentTarget, async()=>{
+      secP.querySelector("#add").onclick=async (ev)=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
         const name=secP.querySelector("#name").value.trim();
         const alias=secP.querySelector("#alias").value.trim();
+        const email=secP.querySelector("#email").value.trim();
         if(!name) return;
-        await API.post('/.netlify/functions/add-player',{name,alias});
-        await init();
-      });
+        try {
+          await spin(ev.currentTarget, async()=>{
+            await API.post('/.netlify/functions/add-player',{name,alias,email});
+          });
+          await init();
+        } catch(err) {
+          alert(`No se pudo añadir el jugador: ${parseError(err)}`);
+        }
+      };
 
       const plist=secP.querySelector("#plist");
       players.forEach(j=>{
@@ -383,25 +534,45 @@
           <div>
             <div class="font-medium">${j.name}</div>
             ${j.alias? `<div class="text-sm text-neutral-500">Alias: ${j.alias}</div>`:''}
+            ${j.email? `<div class="text-sm text-neutral-500">Email: ${j.email}</div>`:''}
             <div class="mt-2 flex flex-wrap items-center gap-2 ${canEdit?'':'opacity-50 pointer-events-none'}">
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo nombre" id="nn-${j.id}">
               <input type="text" class="px-2 py-1 rounded-lg border" placeholder="Nuevo alias" id="na-${j.id}">
+              <input type="email" class="px-2 py-1 rounded-lg border" placeholder="Nuevo email" id="ne-${j.id}" value="${escAttr(j.email||'')}">
               <input type="file" accept="image/*" id="np-${j.id}">
               <button class="btn-soft" id="save-${j.id}">Guardar cambios</button>
             </div>
           </div>
           <button data-id="${j.id}" class="text-sm btn-soft">Eliminar</button>
         </li>`);
-        row.querySelector(`#save-${j.id}`).onclick=(e)=>spin(e.currentTarget, async()=>{
+        row.querySelector(`#save-${j.id}`).onclick=async (ev)=>{
           if(!canEdit) return;
           const name=row.querySelector(`#nn-${j.id}`).value.trim();
           const alias=row.querySelector(`#na-${j.id}`).value.trim();
+          const emailInput=row.querySelector(`#ne-${j.id}`);
+          const emailVal=emailInput?emailInput.value.trim():'';
+          const originalEmail=(j.email||'').trim();
           const f=row.querySelector(`#np-${j.id}`).files?.[0];
           let photo=null; if(f) photo=await compressImage(f, 900, 0.85);
-          await API.post('/.netlify/functions/update-player',{id:j.id, ...(name?{name}:{}) , ...(alias?{alias}:{}) , ...(photo?{photo_base64:photo}:{}) });
-          alert('Cambios guardados ✅');
-          await init();
-        });
+          const payload={ id:j.id };
+          if(name) payload.name=name;
+          if(alias) payload.alias=alias;
+          if(photo) payload.photo_base64=photo;
+          if(emailInput && emailVal!==originalEmail) payload.email=emailVal;
+          if(Object.keys(payload).length===1 && !payload.email){
+            alert('Introduce algún cambio antes de guardar.');
+            return;
+          }
+          try {
+            await spin(ev.currentTarget, async()=>{
+              await API.post('/.netlify/functions/update-player',payload);
+            });
+            alert('Cambios guardados ✅');
+            await init();
+          } catch(err) {
+            alert(`No se pudieron guardar los cambios: ${parseError(err)}`);
+          }
+        };
         row.querySelector("button[data-id]").onclick=(e)=>spin(e.currentTarget, async()=>{
           if(!canEdit) return alert("Introduce la clave de edición.");
           if(!confirm("Eliminar jugador/a?")) return;

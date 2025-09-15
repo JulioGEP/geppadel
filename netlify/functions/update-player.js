@@ -8,10 +8,17 @@ export async function handler(event) {
     }
     requireKey(event);
 
-    const { id, name = null, alias = null, photo_base64 = null } =
+    const { id, name = null, alias = null, photo_base64 = null, email } =
       JSON.parse(event.body || '{}');
 
     if (!id) return json({ error: 'missing-id' }, 400);
+
+    const emailProvided = email !== undefined;
+    let emailValue = null;
+    if (emailProvided) {
+      const trimmed = typeof email === 'string' ? email.trim() : '';
+      emailValue = trimmed ? trimmed : null;
+    }
 
     // Asegura columnas y actualiza solo lo recibido (COALESCE deja el valor actual si llega null)
     const rows = await sql`
@@ -19,9 +26,10 @@ export async function handler(event) {
       SET
         name         = COALESCE(${name}, name),
         alias        = COALESCE(${alias}, alias),
-        photo_base64 = COALESCE(${photo_base64}, photo_base64)
+        photo_base64 = COALESCE(${photo_base64}, photo_base64),
+        email        = CASE WHEN ${emailProvided} THEN ${emailValue} ELSE email END
       WHERE id = ${id}
-      RETURNING id, name, alias, photo_base64
+      RETURNING id, name, alias, photo_base64, email
     `;
 
     if (rows.length === 0) return json({ error: 'not-found' }, 404);
