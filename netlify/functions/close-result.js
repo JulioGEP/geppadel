@@ -42,7 +42,8 @@ export default async (req) => {
       s3a=${sets[2].a}, s3b=${sets[2].b},
       sets_a=${winsA}, sets_b=${winsB},
       finalizado=true,
-      comment=${comment || null}
+      comment=${comment || null},
+      calendar_sent=false
     WHERE id=${id}
   `;
   return json(req, { ok: true, sets, sets_a:winsA, sets_b:winsB });

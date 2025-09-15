@@ -6,7 +6,7 @@ export default async (req) => {
   const p = preflight(req); if (p) return p;
   try {
     const rows = await sql`
-      SELECT id, name, alias, photo_base64
+      SELECT id, name, alias, photo_base64, email
       FROM players
       ORDER BY name ASC
     `;
