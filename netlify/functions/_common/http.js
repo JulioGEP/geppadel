@@ -21,14 +21,26 @@ export const preflight = (req) =>
       })
     : null;
 
+const normalizeKey = (value = '') =>
+  String(value)
+    .trim()
+    .replace(/^['"]+/, '')
+    .replace(/['"]+$/, '');
+
+const parseKeys = (raw = '') =>
+  String(raw)
+    .split(/[,;\n\r]/)
+    .map(normalizeKey)
+    .filter(Boolean);
+
 export const getKey = (req) => {
   const url = new URL(req.url);
-  return req.headers.get('x-api-key') || url.searchParams.get('key') || '';
+  return normalizeKey(req.headers.get('x-api-key') || url.searchParams.get('key') || '');
 };
 
 export const requireAuth = (req) => {
-  const expected = (process.env.API_SHARED_KEY || '').trim();
-  if (!expected) return false;
-  const provided = (getKey(req) || '').trim();
-  return provided && provided === expected;
+  const expectedKeys = parseKeys(process.env.API_SHARED_KEY || '');
+  if (expectedKeys.length === 0) return true;
+  const provided = getKey(req);
+  return provided ? expectedKeys.includes(provided) : false;
 };
