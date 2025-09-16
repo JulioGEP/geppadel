@@ -175,22 +175,32 @@
         });
       });
 
-      const pool = validPlayers.filter(p => !busyPlayers.has(String(p.id)));
-      if (pool.length < 4) return [];
+      const availablePlayers = validPlayers.filter(p => !busyPlayers.has(String(p.id)));
 
       const individualList = (standAll && Array.isArray(standAll.individual)) ? standAll.individual : [];
       const pairList = (standAll && Array.isArray(standAll.parejas)) ? standAll.parejas : [];
-      const individuals = new Map(individualList.map(row => [String(row.id), row]));
-      const pairs = new Map(pairList.map(row => [pairKey(row.a, row.b), row]));
-
-      const playerCache = new Map();
-      const pairCache = new Map();
 
       const toNumber = (value) => {
         if (typeof value === 'number' && !Number.isNaN(value)) return value;
         const parsed = Number(value);
         return Number.isNaN(parsed) ? 0 : parsed;
       };
+
+      const individuals = new Map(individualList.map(row => [String(row.id), row]));
+      const pairs = new Map(pairList.map(row => [pairKey(row.a, row.b), row]));
+
+      const eligiblePlayers = availablePlayers.filter(p => {
+        const data = individuals.get(String(p.id));
+        if (!data) return false;
+        const matchesPlayed = Math.max(0, toNumber(data.pj));
+        const gepto = toNumber(data.geptomic);
+        return matchesPlayed > 0 && gepto > 0;
+      });
+
+      if (eligiblePlayers.length < 4) return [];
+
+      const playerCache = new Map();
+      const pairCache = new Map();
 
       const getPlayerMetric = (id) => {
         const key = String(id);
@@ -239,7 +249,7 @@
       };
 
       const suggestions = [];
-      const list = pool.slice();
+      const list = eligiblePlayers.slice();
       const total = list.length;
       for (let i = 0; i < total - 3; i++) {
         const a = list[i];
