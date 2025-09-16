@@ -82,6 +82,8 @@
       return d < today;
     };
 
+    const pairKey = (a, b) => [String(a ?? ''), String(b ?? '')].sort().join('|');
+
     async function compressImage(file, maxW = 1200, quality = 0.85){
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -158,6 +160,133 @@
         API.get('/.netlify/functions/standings'),
       ]);
       return {players,matches,standAll};
+    }
+
+    function computeMatchSuggestions(players, matches, standAll){
+      const validPlayers = Array.isArray(players) ? players.filter(p => p && p.id != null) : [];
+      if (validPlayers.length < 4) return [];
+
+      const busyPlayers = new Set();
+      (Array.isArray(matches) ? matches : []).forEach(m => {
+        if (!m || m.finalizado) return;
+        [m.a1, m.a2, m.b1, m.b2].forEach(id => {
+          if (id === null || id === undefined) return;
+          busyPlayers.add(String(id));
+        });
+      });
+
+      const pool = validPlayers.filter(p => !busyPlayers.has(String(p.id)));
+      if (pool.length < 4) return [];
+
+      const individualList = (standAll && Array.isArray(standAll.individual)) ? standAll.individual : [];
+      const pairList = (standAll && Array.isArray(standAll.parejas)) ? standAll.parejas : [];
+      const individuals = new Map(individualList.map(row => [String(row.id), row]));
+      const pairs = new Map(pairList.map(row => [pairKey(row.a, row.b), row]));
+
+      const playerCache = new Map();
+      const pairCache = new Map();
+
+      const toNumber = (value) => {
+        if (typeof value === 'number' && !Number.isNaN(value)) return value;
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+      };
+
+      const getPlayerMetric = (id) => {
+        const key = String(id);
+        if (playerCache.has(key)) return playerCache.get(key);
+        const row = individuals.get(key) || {};
+        const geptoRaw = toNumber(row.geptomic);
+        const gepto = geptoRaw > 0 ? geptoRaw : 4;
+        const matchesPlayed = Math.max(0, toNumber(row.pj));
+        const wins = Math.max(0, toNumber(row.pg));
+        const puntos = Math.max(0, toNumber(row.puntos));
+        const gamesFor = toNumber(row.jg);
+        const gamesAgainst = toNumber(row.jp);
+        const diffGames = gamesFor - gamesAgainst;
+        const winRate = matchesPlayed > 0 ? wins / matchesPlayed : 0.5;
+        const setsPerMatch = matchesPlayed > 0 ? puntos / matchesPlayed : 0;
+        const diffPerMatch = matchesPlayed > 0 ? diffGames / Math.max(matchesPlayed, 1) : 0;
+        const rating = gepto * 0.65 + winRate * 0.25 + setsPerMatch * 0.05 + diffPerMatch * 0.03 + matchesPlayed * 0.02;
+        const metric = { gepto, rating, winRate, setsPerMatch, diffPerMatch, matches: matchesPlayed };
+        playerCache.set(key, metric);
+        return metric;
+      };
+
+      const getPairMetric = (id1, id2) => {
+        const key = pairKey(id1, id2);
+        if (pairCache.has(key)) return pairCache.get(key);
+        const row = pairs.get(key) || {};
+        const p1 = getPlayerMetric(id1);
+        const p2 = getPlayerMetric(id2);
+        const geptoRaw = toNumber(row.geptomic);
+        const gepto = geptoRaw > 0 ? geptoRaw : (p1.gepto + p2.gepto) / 2;
+        const matchesPlayed = Math.max(0, toNumber(row.pj));
+        const wins = Math.max(0, toNumber(row.pg));
+        const puntos = Math.max(0, toNumber(row.puntos));
+        const gamesFor = toNumber(row.jg);
+        const gamesAgainst = toNumber(row.jp);
+        const diffGames = gamesFor - gamesAgainst;
+        const winRate = matchesPlayed > 0 ? wins / Math.max(matchesPlayed, 1) : (p1.winRate + p2.winRate) / 2;
+        const setsPerMatch = matchesPlayed > 0 ? puntos / Math.max(matchesPlayed, 1) : (p1.setsPerMatch + p2.setsPerMatch) / 2;
+        const diffPerMatch = matchesPlayed > 0 ? diffGames / Math.max(matchesPlayed, 1) : (p1.diffPerMatch + p2.diffPerMatch) / 2;
+        const avgPlayerRating = (p1.rating + p2.rating) / 2;
+        const synergyGap = Math.abs(p1.rating - p2.rating);
+        const strength = gepto * 0.55 + avgPlayerRating * 0.3 + winRate * 0.1 + setsPerMatch * 0.03 + diffPerMatch * 0.02 + matchesPlayed * 0.01;
+        const metric = { gepto, strength, synergyGap, matches: matchesPlayed, avgPlayerRating };
+        pairCache.set(key, metric);
+        return metric;
+      };
+
+      const suggestions = [];
+      const list = pool.slice();
+      const total = list.length;
+      for (let i = 0; i < total - 3; i++) {
+        const a = list[i];
+        for (let j = i + 1; j < total - 2; j++) {
+          const b = list[j];
+          for (let k = j + 1; k < total - 1; k++) {
+            const c = list[k];
+            for (let l = k + 1; l < total; l++) {
+              const d = list[l];
+              const combos = [
+                [[a, b], [c, d]],
+                [[a, c], [b, d]],
+                [[a, d], [b, c]],
+              ];
+              for (const combo of combos) {
+                const teamAPlayers = combo[0];
+                const teamBPlayers = combo[1];
+                const pairA = getPairMetric(teamAPlayers[0].id, teamAPlayers[1].id);
+                const pairB = getPairMetric(teamBPlayers[0].id, teamBPlayers[1].id);
+                const closeness = Math.abs(pairA.strength - pairB.strength);
+                const avgGepto = (pairA.gepto + pairB.gepto) / 2;
+                const avgPlayers = (pairA.avgPlayerRating + pairB.avgPlayerRating) / 2;
+                const synergy = (pairA.synergyGap + pairB.synergyGap) / 2;
+                const experience = pairA.matches + pairB.matches;
+                const score = closeness * 1.35 + synergy * 0.35 - avgGepto * 0.5 - avgPlayers * 0.2 - experience * 0.02;
+                suggestions.push({
+                  score,
+                  closeness,
+                  avgGepto,
+                  synergy,
+                  experience,
+                  teamA: { metric: pairA, players: teamAPlayers },
+                  teamB: { metric: pairB, players: teamBPlayers },
+                });
+              }
+            }
+          }
+        }
+      }
+
+      suggestions.sort((a,b)=>
+        a.score - b.score ||
+        a.closeness - b.closeness ||
+        b.avgGepto - a.avgGepto
+      );
+
+      return suggestions.slice(0, 200);
     }
 
     // ---------------- UI ----------------
@@ -314,6 +443,77 @@
 
       root.appendChild(T(`<div class="mt-8"></div>`));
 
+      const recSec=T(`
+        <section class="mb-6">
+          <div class="rounded-2xl border border-neutral-200 bg-white p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="font-semibold">Partido recomendado</h3>
+              <button type="button" class="btn-soft" data-rec-refresh>Busca otras parejas</button>
+            </div>
+            <button type="button" class="w-full mt-3 border border-neutral-200 rounded-2xl px-4 py-3 bg-neutral-50 hover:bg-neutral-100 transition-colors" data-rec-accept>
+              <div class="text-xs uppercase tracking-wide text-neutral-500 mb-2">Siguiente partido recomendado</div>
+              <div class="flex flex-wrap items-center justify-center gap-3 text-sm font-medium" data-rec-display></div>
+            </button>
+            <p class="text-sm text-neutral-400 mt-2 hidden" data-rec-empty>No hay suficientes jugadores disponibles para sugerir un partido.</p>
+          </div>
+        </section>`);
+      root.appendChild(recSec);
+
+      const recDisplay = recSec.querySelector('[data-rec-display]');
+      const recAccept = recSec.querySelector('[data-rec-accept]');
+      const recRefresh = recSec.querySelector('[data-rec-refresh]');
+      const recEmpty = recSec.querySelector('[data-rec-empty]');
+      const recSuggestions = computeMatchSuggestions(players, matches, standAll);
+      let recIndex = 0;
+      let applySuggestionToTeams = () => {};
+
+      const renderTeam = (team) => {
+        if (!team || !Array.isArray(team.players) || team.players.length < 2) return '';
+        const [p1, p2] = team.players;
+        const name1 = escAttr((p1 && (p1.alias || p1.name)) || '¿?');
+        const name2 = escAttr((p2 && (p2.alias || p2.name)) || '¿?');
+        const avatar1 = miniAvatar((p1 && (p1.photo_base64 || p1.photo)) || '', p1 ? p1.name : '');
+        const avatar2 = miniAvatar((p2 && (p2.photo_base64 || p2.photo)) || '', p2 ? p2.name : '');
+        return `<span class="inline-flex items-center gap-2">${avatar1}<span>${name1}</span><span class="font-semibold text-neutral-400">+</span>${avatar2}<span>${name2}</span></span>`;
+      };
+
+      const updateRefreshState = () => {
+        const disable = recSuggestions.length <= 1;
+        recRefresh.disabled = disable;
+        recRefresh.classList.toggle('opacity-50', disable);
+        recRefresh.classList.toggle('cursor-not-allowed', disable);
+      };
+
+      const renderRecommendation = () => {
+        const suggestion = recSuggestions[recIndex] || null;
+        if (!suggestion) {
+          recDisplay.innerHTML = `<span class="text-sm text-neutral-400">No hay suficientes jugadores disponibles para sugerir un partido.</span>`;
+          recAccept.disabled = true;
+          recAccept.classList.add('opacity-50','cursor-not-allowed');
+          if (recEmpty) recEmpty.classList.remove('hidden');
+        } else {
+          recDisplay.innerHTML = `${renderTeam(suggestion.teamA)}<span class="mx-3 font-semibold text-neutral-400">vs</span>${renderTeam(suggestion.teamB)}`;
+          recAccept.disabled = false;
+          recAccept.classList.remove('opacity-50','cursor-not-allowed');
+          if (recEmpty) recEmpty.classList.add('hidden');
+        }
+        updateRefreshState();
+      };
+
+      renderRecommendation();
+
+      recRefresh.onclick=()=>{
+        if (recSuggestions.length <= 1) return;
+        recIndex = (recIndex + 1) % recSuggestions.length;
+        renderRecommendation();
+      };
+
+      recAccept.onclick=()=>{
+        const suggestion = recSuggestions[recIndex];
+        if (!suggestion) return;
+        applySuggestionToTeams(suggestion);
+      };
+
       // ------ Crear partido ------
       const courtOptions = COURTS.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
       const sec=T(`<section class="mb-6 grid gap-4">
@@ -356,6 +556,45 @@
         b.onclick=()=>{ if(!canEdit) return; toggle(b,selB,j.id,selA); };
         teamA.appendChild(a); teamB.appendChild(b);
       });
+
+      applySuggestionToTeams = (suggestion) => {
+        if (!suggestion) return;
+        const teamAPlayers = (suggestion.teamA && Array.isArray(suggestion.teamA.players)) ? suggestion.teamA.players : [];
+        const teamBPlayers = (suggestion.teamB && Array.isArray(suggestion.teamB.players)) ? suggestion.teamB.players : [];
+        if (teamAPlayers.length < 2 || teamBPlayers.length < 2) return;
+
+        selA.clear();
+        selB.clear();
+
+        const idsA = new Set(teamAPlayers.map(p => String(p.id)));
+        const idsB = new Set(teamBPlayers.map(p => String(p.id)));
+
+        teamA.querySelectorAll('button').forEach(btn => {
+          const idStr = btn.dataset.id;
+          if (idsA.has(idStr)) {
+            btn.classList.add('pick-active');
+            const player = teamAPlayers.find(p => String(p.id) === idStr);
+            selA.add(player ? player.id : idStr);
+          } else {
+            btn.classList.remove('pick-active');
+          }
+        });
+
+        teamB.querySelectorAll('button').forEach(btn => {
+          const idStr = btn.dataset.id;
+          if (idsB.has(idStr)) {
+            btn.classList.add('pick-active');
+            const player = teamBPlayers.find(p => String(p.id) === idStr);
+            selB.add(player ? player.id : idStr);
+          } else {
+            btn.classList.remove('pick-active');
+          }
+        });
+
+        if (typeof sec.scrollIntoView === 'function') {
+          sec.scrollIntoView({ behavior:'smooth', block:'start' });
+        }
+      };
 
       sec.querySelector("#createMatch").onclick=async (ev)=>{
         if(!canEdit) return alert("Introduce la clave de edición.");
