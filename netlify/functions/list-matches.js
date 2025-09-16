@@ -10,5 +10,15 @@ export default async (req) => {
            court_name, court_email, reservation_sent, calendar_sent
     FROM matches
     ORDER BY COALESCE(date_iso,'') DESC, id DESC`;
-  return json(req, rows);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const enriched = rows.map(row => {
+    const matchDate = row.date_iso ? new Date(row.date_iso) : null;
+    const isPast = !!(matchDate && matchDate < today);
+    if (isPast && !row.court_name) {
+      return { ...row, court_name: 'Padel 1 Sabadell' };
+    }
+    return row;
+  });
+  return json(req, enriched);
 }

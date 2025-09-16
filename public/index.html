@@ -66,6 +66,14 @@
       };
     };
 
+    const isPastMatch = (iso) => {
+      if (!iso) return false;
+      const d = new Date(iso);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return d < today;
+    };
+
     async function compressImage(file, maxW = 1200, quality = 0.85){
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -347,6 +355,8 @@
       if(matches.length===0) list.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
       matches.forEach(m=>{
         const a1=P(m.a1), a2=P(m.a2), b1=P(m.b1), b2=P(m.b2);
+        const isPast = isPastMatch(m.date_iso);
+        const courtName = m.court_name || (isPast ? 'Padel 1 Sabadell' : '');
         const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
           <div class="flex items-center justify-between text-sm mb-1">
             <div class="text-neutral-500">${formatDT(m.date_iso)}</div>
@@ -378,10 +388,11 @@
 
             <div class="grid gap-2">
               <div class="text-sm text-neutral-600">
-                ${m.court_name
-                  ? `<span class="font-medium">Pista:</span> ${m.court_name}${m.court_email?` • <a class="text-blue-600 hover:underline" href="mailto:${m.court_email}">${m.court_email}</a>`:''}`
+                ${courtName
+                  ? `<span class="font-medium">Pista:</span> ${courtName}${m.court_email?` • <a class="text-blue-600 hover:underline" href="mailto:${m.court_email}">${m.court_email}</a>`:''}`
                   : '<span class="text-amber-600 font-medium">Pista pendiente de asignar</span>'}
               </div>
+              ${isPast ? `<div class="text-xs text-neutral-500">Los envíos de correo están deshabilitados para partidos anteriores a hoy.</div>` : ''}
               ${(!m.finalizado && m.reservation_sent)?`<div class="text-xs font-medium text-emerald-600">Reserva Pista Enviada</div>`:''}
               ${(!m.finalizado && m.calendar_sent)?`<div class="text-xs font-medium text-sky-600">Invitaciones enviadas</div>`:''}
               ${!m.finalizado ? `
@@ -404,54 +415,66 @@
 
         const reserveBtn = card.querySelector(`#reserve-${m.id}`);
         if(reserveBtn){
-          reserveBtn.onclick=async (ev)=>{
-            if(!canEdit) return alert("Introduce la clave de edición.");
-            if(!m.court_email){
-              alert('No hay correo de pista configurado.');
-              return;
-            }
-            const { date, time } = formatDateParts(m.date_iso);
-            const defaultMsg = `¡Hola!\n\nNos gustaría reservar una pista para el día ${date} y la hora ${time}.\nSi tenéis espacio, nos podrías confirmar el número de pista por favor.\nLa reserva la ponemos a nombre de Julio de GEP (es el nombre de la empresa)\n\nMuchas gracias por adelantado.`;
-            const message = await openTextModal({ title: 'Correo de reserva', defaultValue: defaultMsg, confirmLabel: 'Enviar correo' });
-            if(!message) return;
-            try {
-              await spin(ev.currentTarget, async ()=>{
-                await API.post('/.netlify/functions/send-reservation',{ matchId:m.id, message });
-              });
-              alert('Correo enviado ✅');
-              await init();
-            } catch(err) {
-              alert(`No se pudo enviar el correo: ${parseError(err)}`);
-            }
-          };
+          if(isPast){
+            reserveBtn.disabled = true;
+            reserveBtn.classList.add('opacity-50','cursor-not-allowed');
+            reserveBtn.title = 'Solo disponible para partidos futuros.';
+          } else {
+            reserveBtn.onclick=async (ev)=>{
+              if(!canEdit) return alert("Introduce la clave de edición.");
+              if(!m.court_email){
+                alert('No hay correo de pista configurado.');
+                return;
+              }
+              const { date, time } = formatDateParts(m.date_iso);
+              const defaultMsg = `¡Hola!\n\nNos gustaría reservar una pista para el día ${date} y la hora ${time}.\nSi tenéis espacio, nos podrías confirmar el número de pista por favor.\nLa reserva la ponemos a nombre de Julio de GEP (es el nombre de la empresa)\n\nMuchas gracias por adelantado.`;
+              const message = await openTextModal({ title: 'Correo de reserva', defaultValue: defaultMsg, confirmLabel: 'Enviar correo' });
+              if(!message) return;
+              try {
+                await spin(ev.currentTarget, async ()=>{
+                  await API.post('/.netlify/functions/send-reservation',{ matchId:m.id, message });
+                });
+                alert('Correo enviado ✅');
+                await init();
+              } catch(err) {
+                alert(`No se pudo enviar el correo: ${parseError(err)}`);
+              }
+            };
+          }
         }
 
         const calendarBtn = card.querySelector(`#calendar-${m.id}`);
         if(calendarBtn){
-          calendarBtn.onclick=async (ev)=>{
-            if(!canEdit) return alert("Introduce la clave de edición.");
-            const emailPlayers=[a1,a2,b1,b2].map(P).filter(p=>p && p.email);
-            if(emailPlayers.length===0){
-              alert('Ningún participante tiene email configurado.');
-              return;
-            }
-            if(!m.reservation_sent){
-              const ok = confirm('¿Tenéis la pista reservada ya?');
-              if(!ok){
-                alert('No se enviará hasta que no haya pista.');
+          if(isPast){
+            calendarBtn.disabled = true;
+            calendarBtn.classList.add('opacity-50','cursor-not-allowed');
+            calendarBtn.title = 'Solo disponible para partidos futuros.';
+          } else {
+            calendarBtn.onclick=async (ev)=>{
+              if(!canEdit) return alert("Introduce la clave de edición.");
+              const emailPlayers=[a1,a2,b1,b2].map(P).filter(p=>p && p.email);
+              if(emailPlayers.length===0){
+                alert('Ningún participante tiene email configurado.');
                 return;
               }
-            }
-            try {
-              await spin(ev.currentTarget, async ()=>{
-                await API.post('/.netlify/functions/send-calendar',{ matchId:m.id });
-              });
-              alert('Invitaciones enviadas ✅');
-              await init();
-            } catch(err) {
-              alert(`No se pudieron enviar las invitaciones: ${parseError(err)}`);
-            }
-          };
+              if(!m.reservation_sent){
+                const ok = confirm('¿Tenéis la pista reservada ya?');
+                if(!ok){
+                  alert('No se enviará hasta que no haya pista.');
+                  return;
+                }
+              }
+              try {
+                await spin(ev.currentTarget, async ()=>{
+                  await API.post('/.netlify/functions/send-calendar',{ matchId:m.id });
+                });
+                alert('Invitaciones enviadas ✅');
+                await init();
+              } catch(err) {
+                alert(`No se pudieron enviar las invitaciones: ${parseError(err)}`);
+              }
+            };
+          }
         }
 
         // Subir foto

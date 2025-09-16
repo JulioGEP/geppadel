@@ -18,7 +18,12 @@ export default async (req) => {
   if (matches.length === 0) return json(req, { error: 'not-found' }, 404);
   const match = matches[0];
 
-  const shouldNotifyCancel = !match.finalizado && match.calendar_sent;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const matchDate = match.date_iso ? new Date(match.date_iso) : null;
+  const isPastMatch = !!(matchDate && matchDate < today);
+
+  const shouldNotifyCancel = !match.finalizado && match.calendar_sent && !isPastMatch;
   let cancelError = null;
   if (shouldNotifyCancel) {
     const playerIds = [match.a1, match.a2, match.b1, match.b2].filter(Boolean);
