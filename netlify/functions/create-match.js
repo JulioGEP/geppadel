@@ -14,8 +14,13 @@ export default async (req) => {
   if (!courtName || !courtEmail) return json(req, { error: 'court-required' }, 400);
 
   const id = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+  const rawDate = (() => {
+    if (!dateISO) return null;
+    const parsed = new Date(dateISO);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  })();
   const [match] = await sql`INSERT INTO matches (id, date_iso, a1, a2, b1, b2, comment, finalizado, court_name, court_email, reservation_sent, calendar_sent)
-                            VALUES (${id}, ${dateISO || null}, ${a1}, ${a2}, ${b1}, ${b2}, ${comment || null}, false, ${courtName}, ${courtEmail}, false, false)
+                            VALUES (${id}, ${rawDate}, ${a1}, ${a2}, ${b1}, ${b2}, ${comment || null}, false, ${courtName}, ${courtEmail}, false, false)
                             RETURNING id`;
   return json(req, match);
 }
