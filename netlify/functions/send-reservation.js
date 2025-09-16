@@ -36,13 +36,25 @@ export default async (req) => {
   const subjectCourt = match.court_name || 'Pista por confirmar';
   const subject = `Reserva pista ${subjectCourt} - ${date} ${time}`;
 
-  await sendMail({
-    to: match.court_email,
-    cc: participantEmails,
-    subject,
-    text: message,
-  });
+  try {
+    await sendMail({
+      to: match.court_email,
+      cc: participantEmails,
+      subject,
+      text: message,
+    });
+  } catch (err) {
+    console.error('send-reservation mail error', err);
+    const errorMessage = err && err.message ? `No se pudo enviar el correo: ${err.message}` : 'No se pudo enviar el correo.';
+    return json(req, { error: errorMessage }, 500);
+  }
 
-  await sql`UPDATE matches SET reservation_sent=true WHERE id=${matchId}`;
+  try {
+    await sql`UPDATE matches SET reservation_sent=true WHERE id=${matchId}`;
+  } catch (err) {
+    console.error('send-reservation db error', err);
+    return json(req, { error: 'El correo se envió pero no se pudo actualizar el estado de la reserva.' }, 500);
+  }
+
   return json(req, { ok: true, reservation_sent: true });
 };
