@@ -5,6 +5,54 @@ import { randomUUID } from 'node:crypto';
 
 const DEFAULT_TIMEOUT = 15000;
 
+const parseBool = (value) => {
+  if (value === undefined || value === null) return undefined;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  return undefined;
+};
+
+const parseSMTPUrl = (value) => {
+  if (!value) return {};
+  try {
+    const url = new URL(value);
+    const params = url.searchParams;
+    const config = {
+      host: url.hostname || undefined,
+    };
+    if (url.port) {
+      const port = Number(url.port);
+      if (!Number.isNaN(port)) config.port = port;
+    }
+    if (url.username) config.user = decodeURIComponent(url.username);
+    if (url.password) config.pass = decodeURIComponent(url.password);
+    if (url.protocol === 'smtps:') config.secure = true;
+    const boolParam = (name, current) => {
+      if (!params.has(name)) return current;
+      const parsed = parseBool(params.get(name));
+      return parsed === undefined ? current : parsed;
+    };
+    config.secure = boolParam('secure', config.secure);
+    config.requireTLS = boolParam('requireTLS', config.requireTLS);
+    config.requireTLS = boolParam('require_tls', config.requireTLS);
+    config.requireTLS = boolParam('tls', config.requireTLS);
+    config.rejectUnauthorized = boolParam('rejectUnauthorized', config.rejectUnauthorized);
+    config.rejectUnauthorized = boolParam('reject_unauthorized', config.rejectUnauthorized);
+    config.rejectUnauthorized = boolParam('tlsreject', config.rejectUnauthorized);
+    if (params.has('client')) config.clientName = params.get('client') || undefined;
+    if (params.has('clientName')) config.clientName = params.get('clientName') || config.clientName;
+    if (params.has('name')) config.clientName = params.get('name') || config.clientName;
+    if (params.has('from')) config.from = params.get('from') || undefined;
+    if (params.has('sender')) config.from = params.get('sender') || config.from;
+    return config;
+  } catch (err) {
+    console.warn('Invalid SMTP_URL provided, ignoring it', err);
+    return {};
+  }
+};
+
 const toArray = (val) => {
   if (!val) return [];
   return Array.isArray(val) ? val.filter(Boolean) : String(val).split(',').map(v=>v.trim()).filter(Boolean);
@@ -253,15 +301,42 @@ class SMTPClient {
 }
 
 export async function sendMail(options) {
-  const host = process.env.SMTP_HOST || process.env.EMAIL_HOST;
+  const urlConfig = parseSMTPUrl(
+    process.env.SMTP_URL || process.env.EMAIL_URL || process.env.MAIL_URL || process.env.MAILER_DSN
+  );
+  const host = process.env.SMTP_HOST || process.env.EMAIL_HOST || urlConfig.host;
   if (!host) throw new Error('SMTP_HOST not configured');
-  const port = Number(process.env.SMTP_PORT || 587);
-  const secure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
-  const requireTLS = (process.env.SMTP_REQUIRE_TLS || '').toLowerCase() !== 'false';
-  const rejectUnauthorized = (process.env.SMTP_TLS_REJECT || 'true').toLowerCase() !== 'false';
-  const clientName = process.env.SMTP_CLIENT_NAME || undefined;
-  const user = process.env.SMTP_USER || '';
-  const pass = process.env.SMTP_PASS || '';
+
+  let port;
+  if (process.env.SMTP_PORT) {
+    const parsed = Number(process.env.SMTP_PORT);
+    if (!Number.isNaN(parsed)) port = parsed;
+  } else if (urlConfig.port) {
+    port = urlConfig.port;
+  }
+
+  const secureFlag = parseBool(process.env.SMTP_SECURE);
+  const requireTLSFlag = parseBool(process.env.SMTP_REQUIRE_TLS);
+  const rejectUnauthorizedFlag = parseBool(process.env.SMTP_TLS_REJECT);
+
+  let secure = secureFlag;
+  if (secure === undefined && typeof urlConfig.secure === 'boolean') secure = urlConfig.secure;
+  if (secure === undefined && port === 465) secure = true;
+  if (secure === undefined) secure = false;
+
+  if (!port) port = secure ? 465 : 587;
+
+  const requireTLS =
+    requireTLSFlag ??
+    (typeof urlConfig.requireTLS === 'boolean' ? urlConfig.requireTLS : undefined) ??
+    true;
+  const rejectUnauthorized =
+    rejectUnauthorizedFlag ??
+    (typeof urlConfig.rejectUnauthorized === 'boolean' ? urlConfig.rejectUnauthorized : undefined) ??
+    true;
+  const clientName = process.env.SMTP_CLIENT_NAME || urlConfig.clientName || undefined;
+  const user = process.env.SMTP_USER || urlConfig.user || '';
+  const pass = process.env.SMTP_PASS || urlConfig.pass || '';
 
   const to = toArray(options.to);
   const cc = toArray(options.cc);
@@ -269,7 +344,12 @@ export async function sendMail(options) {
   const recipients = [...new Set([...to, ...cc, ...bcc])];
   if (!recipients.length) throw new Error('No recipients provided');
 
-  const fromAddr = options.from || process.env.SMTP_FROM || process.env.MAIL_FROM || 'julio@gepgroup.es';
+  const fromAddr =
+    options.from ||
+    process.env.SMTP_FROM ||
+    process.env.MAIL_FROM ||
+    urlConfig.from ||
+    'julio@gepgroup.es';
 
   const headers = [];
   headers.push(`From: ${fromAddr}`);
