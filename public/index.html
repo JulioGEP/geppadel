@@ -197,36 +197,63 @@
       const tableWrap=T(`<div class="overflow-x-auto rounded-2xl border border-neutral-200 bg-white"></div>`);
       root.appendChild(tableWrap);
 
+      const sortState = {
+        ind: { key: null, dir: 'desc' },
+        pair: { key: null, dir: 'desc' },
+      };
+      const SORTABLE_COLUMNS = [
+        { key: 'puntos', label: 'Puntos (sets)' },
+        { key: 'pj', label: 'PJ' },
+        { key: 'pg', label: 'PG' },
+        { key: 'pp', label: 'PP' },
+        { key: 'jg', label: 'JG' },
+        { key: 'jp', label: 'JP' },
+        { key: 'dif', label: 'Dif' },
+        { key: 'geptomic', label: 'GEPTomic' },
+      ];
+      const asNumber = (value) => {
+        if (value === null || value === undefined) return 0;
+        if (typeof value === 'number') return value;
+        const parsed = parseFloat(String(value).replace(',', '.'));
+        return Number.isNaN(parsed) ? 0 : parsed;
+      };
+      const getSortValue = (row, key) => {
+        if (key === 'dif') return asNumber(row.jg) - asNumber(row.jp);
+        return asNumber(row[key]);
+      };
+
       const paintTable=(mode='ind')=>{
-        const rows = mode==='ind' ? (standAll.individual||standAll) : (standAll.parejas||[]);
-        const thead = (mode==='ind')
-          ? `<thead class="bg-neutral-50"><tr>
-               <th class="px-4 py-3 text-left">#</th>
-               <th class="px-4 py-3 text-left">Jugador/a</th>
-               <th class="px-4 py-3 text-center">Puntos (sets)</th>
-               <th class="px-4 py-3 text-center">PJ</th>
-               <th class="px-4 py-3 text-center">PG</th>
-               <th class="px-4 py-3 text-center">PP</th>
-               <th class="px-4 py-3 text-center">JG</th>
-               <th class="px-4 py-3 text-center">JP</th>
-               <th class="px-4 py-3 text-center">Dif</th>
-               <th class="px-4 py-3 text-center">GEPTomic</th>
-             </tr></thead>`
-          : `<thead class="bg-neutral-50"><tr>
-               <th class="px-4 py-3 text-left">#</th>
-               <th class="px-4 py-3 text-left">Pareja</th>
-               <th class="px-4 py-3 text-center">Puntos (sets)</th>
-               <th class="px-4 py-3 text-center">PJ</th>
-               <th class="px-4 py-3 text-center">PG</th>
-               <th class="px-4 py-3 text-center">PP</th>
-               <th class="px-4 py-3 text-center">JG</th>
-               <th class="px-4 py-3 text-center">JP</th>
-               <th class="px-4 py-3 text-center">Dif</th>
-               <th class="px-4 py-3 text-center">GEPTomic</th>
-             </tr></thead>`;
+        const rawRows = mode==='ind' ? (standAll.individual||standAll) : (standAll.parejas||[]);
+        const rows = Array.isArray(rawRows) ? [...rawRows] : [];
+        const state = sortState[mode] || (sortState[mode] = { key: null, dir: 'desc' });
+
+        if (state.key) {
+          rows.sort((a,b)=>{
+            const va = getSortValue(a, state.key);
+            const vb = getSortValue(b, state.key);
+            return state.dir === 'desc' ? vb - va : va - vb;
+          });
+        }
+
+        const thead = (()=>{
+          const nameLabel = mode==='ind' ? 'Jugador/a' : 'Pareja';
+          const cells = SORTABLE_COLUMNS.map(col=>{
+            const active = state.key === col.key;
+            const arrow = active ? (state.dir === 'desc' ? '▼' : '▲') : '';
+            return `<th class="px-4 py-3 text-center cursor-pointer select-none" data-sort="${col.key}">${col.label}${arrow ? ` <span class="inline-block text-xs">${arrow}</span>` : ''}</th>`;
+          }).join('');
+          return `<thead class="bg-neutral-50"><tr>` +
+            `<th class="px-4 py-3 text-left">#</th>` +
+            `<th class="px-4 py-3 text-left">${nameLabel}</th>` +
+            cells +
+          `</tr></thead>`;
+        })();
 
         const tbody = document.createElement('tbody');
         rows.forEach((r,i)=>{
+          const diffVal = asNumber(r.jg) - asNumber(r.jp);
+          const diffText = `${diffVal >= 0 ? '+' : ''}${diffVal}`;
+          const diffClass = diffVal >= 0 ? 'text-green-600' : 'text-red-600';
           if(mode==='ind'){
             tbody.appendChild(T(
               `<tr class="border-t border-neutral-100 row">
@@ -238,7 +265,7 @@
                  <td class="px-4 py-3 text-center">${r.pp}</td>
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
-                 <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
+                 <td class="px-4 py-3 text-center font-semibold ${diffClass}">${diffText}</td>
                  <td class="px-4 py-3 text-center">${r.geptomic}</td>
                </tr>`
             ));
@@ -257,7 +284,7 @@
                  <td class="px-4 py-3 text-center">${r.pp}</td>
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
-                 <td class="px-4 py-3 text-center font-semibold ${r.jg - r.jp >= 0 ? 'text-green-600' : 'text-red-600'}">${r.jg - r.jp >= 0 ? '+' : ''}${r.jg - r.jp}</td>
+                 <td class="px-4 py-3 text-center font-semibold ${diffClass}">${diffText}</td>
                  <td class="px-4 py-3 text-center">${r.geptomic}</td>
                </tr>`
             ));
@@ -265,7 +292,21 @@
         });
 
         tableWrap.innerHTML = `<table class="min-w-full text-sm">${thead}</table>`;
-        tableWrap.querySelector('table').appendChild(tbody);
+        const tableEl = tableWrap.querySelector('table');
+        tableEl.appendChild(tbody);
+        tableEl.querySelectorAll('th[data-sort]').forEach(th=>{
+          th.addEventListener('click',()=>{
+            const key = th.dataset.sort;
+            if (!key) return;
+            if (state.key === key) {
+              state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+            } else {
+              state.key = key;
+              state.dir = 'desc';
+            }
+            paintTable(mode);
+          });
+        });
       };
       paintTable('ind');
       sel.querySelector('#tabInd').onclick=()=>{ sel.querySelector('#tabInd').classList.add('bg-white'); sel.querySelector('#tabPair').classList.remove('bg-white'); paintTable('ind'); };
