@@ -416,6 +416,7 @@
       if(matches.length===0) list.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
       matches.forEach(m=>{
         const a1=P(m.a1), a2=P(m.a2), b1=P(m.b1), b2=P(m.b2);
+        const participants = [a1, a2, b1, b2].filter(Boolean);
         const isPast = isPastMatch(m.date_iso);
         const courtName = m.court_name || (isPast ? 'Padel 1 Sabadell' : '');
         const card=T(`<div class="rounded-2xl border border-neutral-200 bg-white p-4">
@@ -559,7 +560,7 @@
                 alert('Configura la fecha del partido en el calendario antes de enviar invitaciones.');
                 return;
               }
-              const emailPlayers=[a1,a2,b1,b2].map(P).filter(p=>p && p.email);
+              const emailPlayers = participants.filter(p=>p.email);
               if(emailPlayers.length===0){
                 alert('Ningún participante tiene email configurado.');
                 return;
