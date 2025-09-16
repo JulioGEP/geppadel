@@ -322,7 +322,19 @@
         const courtSel = sec.querySelector("#court");
         const court = COURTS.find(c=>c.id===courtSel.value);
         if(!court) return alert("Selecciona una pista.");
-        const fecha=sec.querySelector("#fecha").value || new Date().toISOString();
+        const fechaInput = sec.querySelector("#fecha");
+        const fechaVal = (fechaInput?.value || '').trim();
+        if(!fechaVal){
+          alert('Selecciona fecha y hora en el calendario.');
+          fechaInput?.focus();
+          return;
+        }
+        if(Number.isNaN(new Date(fechaVal).getTime())){
+          alert('La fecha indicada no es válida.');
+          fechaInput?.focus();
+          return;
+        }
+        const fecha = fechaVal;
         const coment=sec.querySelector("#coment").value.trim();
         const [a1,a2]=[...selA], [b1,b2]=[...selB];
         try {
@@ -406,7 +418,6 @@
                   <div class="flex flex-wrap gap-2 items-center">
                     <input type="datetime-local" id="date-${m.id}" class="px-3 py-2 rounded-xl border border-neutral-300" value="${formatDateForInput(m.date_iso)}">
                     <button class="btn-soft" id="save-date-${m.id}">${m.date_iso ? 'Actualizar fecha' : 'Guardar fecha'}</button>
-                    ${m.date_iso ? `<button class="btn-soft" id="clear-date-${m.id}">Quitar fecha</button>`:''}
                   </div>
                 </div>
               `:''}
@@ -415,7 +426,7 @@
               ${(!m.finalizado && m.calendar_sent)?`<div class="text-xs font-medium text-sky-600">Invitaciones enviadas</div>`:''}
               ${!m.finalizado ? `
                 <div class="flex flex-wrap gap-2">
-                  <button class="btn-soft" id="reserve-${m.id}">Reservar</button>
+                  <button class="btn-soft" id="reserve-${m.id}">Reservar Pista</button>
                   <button class="btn-soft" id="calendar-${m.id}">Enviar Calendar</button>
                 </div>
               `:''}
@@ -460,23 +471,6 @@
           };
         }
 
-        const clearDateBtn = card.querySelector(`#clear-date-${m.id}`);
-        if(clearDateBtn){
-          clearDateBtn.onclick=async (ev)=>{
-            if(!canEdit) return alert("Introduce la clave de edición.");
-            if(!confirm('¿Quitar la fecha del partido?')) return;
-            try {
-              await spin(ev.currentTarget, async ()=>{
-                await API.post('/.netlify/functions/update-match-date',{ id:m.id, dateISO:null });
-              });
-              alert('Fecha eliminada ✅');
-              await init();
-            } catch(err) {
-              alert(`No se pudo actualizar la fecha: ${parseError(err)}`);
-            }
-          };
-        }
-
         const reserveBtn = card.querySelector(`#reserve-${m.id}`);
         if(reserveBtn){
           if(isPast){
@@ -488,6 +482,10 @@
               if(!canEdit) return alert("Introduce la clave de edición.");
               if(!m.court_email){
                 alert('No hay correo de pista configurado.');
+                return;
+              }
+              if(!m.date_iso){
+                alert('Configura la fecha del partido en el calendario antes de reservar la pista.');
                 return;
               }
               const { date, time } = formatDateParts(m.date_iso);
@@ -516,6 +514,10 @@
           } else {
             calendarBtn.onclick=async (ev)=>{
               if(!canEdit) return alert("Introduce la clave de edición.");
+              if(!m.date_iso){
+                alert('Configura la fecha del partido en el calendario antes de enviar invitaciones.');
+                return;
+              }
               const emailPlayers=[a1,a2,b1,b2].map(P).filter(p=>p && p.email);
               if(emailPlayers.length===0){
                 alert('Ningún participante tiene email configurado.');
