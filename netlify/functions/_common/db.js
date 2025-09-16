@@ -12,7 +12,12 @@ export const sql = neon(CONN);
 export function requireKey(event) {
   const want = process.env.API_SHARED_KEY || '';
   if (!want) return; // sin clave configurada => libre (para pruebas)
-  const got = event.headers['x-api-key'] || event.headers['X-Api-Key'];
+  const got =
+    event.headers?.['x-api-key'] ||
+    event.headers?.['X-Api-Key'] ||
+    event.queryStringParameters?.key ||
+    event.queryStringParameters?.apiKey ||
+    event.queryStringParameters?.api_key;
   if (got !== want) {
     const err = new Error('forbidden');
     err.statusCode = 403;
