@@ -198,7 +198,7 @@
         return matchesPlayed > 0 && (geptoRaw > 0 || points > 0);
       };
 
-      const pool = validPlayers.filter(p => !busyPlayers.has(String(p.id)) && hasStats(p));
+      const pool = validPlayers.filter((player) => !busyPlayers.has(String(player.id)) && hasStats(player));
       if (pool.length < 4) return [];
 
       const getPlayerMetric = (id) => {
