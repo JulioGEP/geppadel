@@ -21,6 +21,12 @@ export default async (req) => {
   const match = rows[0];
   if (match.finalizado) return json(req, { error: 'already-finalized' }, 400);
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const matchDate = match.date_iso ? new Date(match.date_iso) : null;
+  const isPastMatch = !!(matchDate && matchDate < today);
+  if (isPastMatch) return json(req, { error: 'No se pueden enviar correos para partidos anteriores a hoy.' }, 400);
+
   const playerIds = [match.a1, match.a2, match.b1, match.b2].filter(Boolean);
   const players = playerIds.length
     ? await sql`SELECT id, name, email FROM players WHERE id = ANY(${playerIds})`
@@ -33,8 +39,10 @@ export default async (req) => {
   const start = match.date_iso ? new Date(match.date_iso) : new Date();
   const end = new Date(start.getTime() + ninetyMinutes);
   const organizerEmail = process.env.SMTP_FROM || process.env.MAIL_FROM || 'julio@gepgroup.es';
-  const summary = `GEP Padel + ${match.court_name || 'Pista por confirmar'}`;
-  const description = `Partido en ${match.court_name || 'pista por confirmar'} el ${date} a las ${time}. Participantes: ${namesText}.`;
+  const summaryCourt = match.court_name || 'Pista por confirmar';
+  const descriptionCourt = match.court_name || 'pista por confirmar';
+  const summary = `GEP Padel + ${summaryCourt}`;
+  const description = `Partido en ${descriptionCourt} el ${date} a las ${time}. Participantes: ${namesText}.`;
   const icsContent = formatICS({
     id: match.id,
     summary,

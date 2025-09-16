@@ -13,6 +13,8 @@ export default async (req) => {
   if (!name) return json(req, { error: 'name-required' }, 400);
 
   const id = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
-  await sql`INSERT INTO players (id, name, alias, photo_base64, email) VALUES (${id}, ${name}, ${alias || null}, ${photo}, ${email || null})`;
-  return json(req, { id, name, alias, photo_base64: photo, email: email || null });
+  const [player] = await sql`INSERT INTO players (id, name, alias, photo_base64, email)
+                             VALUES (${id}, ${name}, ${alias || null}, ${photo}, ${email || null})
+                             RETURNING id, name, alias, photo_base64, email`;
+  return json(req, player);
 }

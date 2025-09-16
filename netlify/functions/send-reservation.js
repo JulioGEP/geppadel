@@ -21,13 +21,20 @@ export default async (req) => {
   const match = rows[0];
   if (!match.court_email) return json(req, { error: 'court-email-missing' }, 400);
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const matchDate = match.date_iso ? new Date(match.date_iso) : null;
+  const isPastMatch = !!(matchDate && matchDate < today);
+  if (isPastMatch) return json(req, { error: 'No se pueden enviar correos para partidos anteriores a hoy.' }, 400);
+
   const playerIds = [match.a1, match.a2, match.b1, match.b2].filter(Boolean);
   const players = playerIds.length
     ? await sql`SELECT id, name, email FROM players WHERE id = ANY(${playerIds})`
     : [];
   const participantEmails = players.filter(p=>p.email).map(p=>p.email);
   const { date, time } = formatDateParts(match.date_iso);
-  const subject = `Reserva pista ${match.court_name || ''} - ${date} ${time}`.trim();
+  const subjectCourt = match.court_name || 'Pista por confirmar';
+  const subject = `Reserva pista ${subjectCourt} - ${date} ${time}`;
 
   await sendMail({
     to: match.court_email,
