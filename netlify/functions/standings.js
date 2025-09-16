@@ -146,6 +146,8 @@ export default async (req) => {
     }
   }
 
+  const formatRating = (entry) => entry.pj ? +entry.geptomic.toFixed(2) : 0;
+
   const individual = Array.from(ind.values())
     .sort((a,b)=>
       b.puntos - a.puntos ||
@@ -155,7 +157,7 @@ export default async (req) => {
       a.pp - b.pp ||
       a.name.localeCompare(b.name)
     )
-    .map(r=>({ ...r, dif:r.jg - r.jp, geptomic:+r.geptomic.toFixed(2) }));
+    .map(r=>({ ...r, dif:r.jg - r.jp, geptomic:formatRating(r) }));
   const parejas = Array.from(pairs.values())
     .sort((a,b)=>
       b.puntos - a.puntos ||
@@ -165,7 +167,7 @@ export default async (req) => {
       a.pp - b.pp ||
       a.name.localeCompare(b.name)
     )
-    .map(r=>({ ...r, dif:r.jg - r.jp, geptomic:+r.geptomic.toFixed(2) }));
+    .map(r=>({ ...r, dif:r.jg - r.jp, geptomic:formatRating(r) }));
 
   return json(req, { individual, parejas });
 }
