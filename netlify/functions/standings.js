@@ -18,6 +18,16 @@ const sumSetsGames = (m) => {
   return { sa, sb, ga, gb };
 };
 
+const matchPoints = (sa, sb) => {
+  if (sa > sb) {
+    return [sb === 0 ? 3 : 2, sb === 0 ? 0 : 1];
+  }
+  if (sb > sa) {
+    return [sa === 0 ? 0 : 1, sa === 0 ? 3 : 2];
+  }
+  return [0, 0];
+};
+
 export default async (req) => {
   const p = preflight(req); if (p) return p;
 
@@ -113,16 +123,18 @@ export default async (req) => {
     // PG/PP
     if (aWins) { A.forEach(id=>ind.get(id).pg++); B.forEach(id=>ind.get(id).pp++); }
     else if (bWins) { B.forEach(id=>ind.get(id).pg++); A.forEach(id=>ind.get(id).pp++); }
-    // Puntos (sets) + juegos ganados/perdidos
+    const [pointsA, pointsB] = matchPoints(sa, sb);
+
+    // Puntos + juegos ganados/perdidos
     A.forEach(id=>{
       const r = ind.get(id);
-      r.puntos += sa;
+      r.puntos += pointsA;
       r.jg += ga;
       r.jp += gb;
     });
     B.forEach(id=>{
       const r = ind.get(id);
-      r.puntos += sb;
+      r.puntos += pointsB;
       r.jg += gb;
       r.jp += ga;
     });
@@ -130,7 +142,7 @@ export default async (req) => {
     // Parejas stats
     if (pairA) {
       pairA.pj++;
-      pairA.puntos+=sa;
+      pairA.puntos+=pointsA;
       pairA.jg+=ga;
       pairA.jp+=gb;
       if (aWins) pairA.pg++;
@@ -138,7 +150,7 @@ export default async (req) => {
     }
     if (pairB) {
       pairB.pj++;
-      pairB.puntos+=sb;
+      pairB.puntos+=pointsB;
       pairB.jg+=gb;
       pairB.jp+=ga;
       if (bWins) pairB.pg++;
