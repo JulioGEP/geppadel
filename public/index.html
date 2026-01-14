@@ -360,6 +360,26 @@
         if (key === 'dif') return asNumber(row.jg) - asNumber(row.jp);
         return asNumber(row[key]);
       };
+      const buildGeptomicCell = (row, currentPos) => {
+        const prevPos = row.prev_position ?? currentPos;
+        let icon = '=';
+        let color = 'text-orange-500';
+        if (prevPos > currentPos) {
+          icon = '▲';
+          color = 'text-green-600';
+        } else if (prevPos < currentPos) {
+          icon = '▼';
+          color = 'text-red-600';
+        }
+        return `
+          <div class="flex flex-col items-center leading-tight">
+            <div>${row.geptomic}</div>
+            <div class="flex items-center gap-1 text-xs ${color}">
+              <span>${icon}</span>
+              <span class="text-[0.7rem]">${prevPos}</span>
+            </div>
+          </div>`;
+      };
 
       const paintTable=(mode='ind')=>{
         const rawRows = mode==='ind' ? (standAll.individual||standAll) : (standAll.parejas||[]);
@@ -393,6 +413,7 @@
           const diffVal = asNumber(r.jg) - asNumber(r.jp);
           const diffText = `${diffVal >= 0 ? '+' : ''}${diffVal}`;
           const diffClass = diffVal >= 0 ? 'text-green-600' : 'text-red-600';
+          const geptomicCell = buildGeptomicCell(r, i + 1);
           if(mode==='ind'){
             tbody.appendChild(T(
               `<tr class="border-t border-neutral-100 row">
@@ -405,7 +426,7 @@
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
                  <td class="px-4 py-3 text-center font-semibold ${diffClass}">${diffText}</td>
-                 <td class="px-4 py-3 text-center">${r.geptomic}</td>
+                 <td class="px-4 py-3 text-center">${geptomicCell}</td>
                </tr>`
             ));
           }else{
@@ -424,7 +445,7 @@
                  <td class="px-4 py-3 text-center">${r.jg}</td>
                  <td class="px-4 py-3 text-center">${r.jp}</td>
                  <td class="px-4 py-3 text-center font-semibold ${diffClass}">${diffText}</td>
-                 <td class="px-4 py-3 text-center">${r.geptomic}</td>
+                 <td class="px-4 py-3 text-center">${geptomicCell}</td>
                </tr>`
             ));
           }
