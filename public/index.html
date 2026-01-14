@@ -360,8 +360,9 @@
         if (key === 'dif') return asNumber(row.jg) - asNumber(row.jp);
         return asNumber(row[key]);
       };
-      const buildGeptomicCell = (row, currentPos) => {
-        const prevPos = row.prev_position ?? currentPos;
+      const getRowKey = (row, mode) => (mode === 'ind' ? row.id : row.key);
+      const buildGeptomicCell = (row, currentPos, prevPosOverride) => {
+        const prevPos = prevPosOverride ?? row.prev_position ?? currentPos;
         const prevGeptomic = row.prev_geptomic ?? 0;
         let icon = '=';
         let color = 'text-orange-500';
@@ -381,6 +382,22 @@
             </div>
           </div>`;
       };
+      const getPrevPositionMap = (rows, mode, sortKey, sortDir) => {
+        if (sortKey !== 'geptomic') return null;
+        const sortedPrev = [...rows].sort((a, b) => {
+          const va = asNumber(a.prev_geptomic);
+          const vb = asNumber(b.prev_geptomic);
+          if (va === vb) {
+            return (a.name || '').localeCompare(b.name || '');
+          }
+          return sortDir === 'desc' ? vb - va : va - vb;
+        });
+        const map = new Map();
+        sortedPrev.forEach((row, idx) => {
+          map.set(getRowKey(row, mode), idx + 1);
+        });
+        return map;
+      };
 
       const paintTable=(mode='ind')=>{
         const rawRows = mode==='ind' ? (standAll.individual||standAll) : (standAll.parejas||[]);
@@ -394,6 +411,7 @@
             return state.dir === 'desc' ? vb - va : va - vb;
           });
         }
+        const prevPositionMap = getPrevPositionMap(rows, mode, state.key, state.dir);
 
         const thead = (()=>{
           const nameLabel = mode==='ind' ? 'Jugador/a' : 'Pareja';
@@ -414,7 +432,9 @@
           const diffVal = asNumber(r.jg) - asNumber(r.jp);
           const diffText = `${diffVal >= 0 ? '+' : ''}${diffVal}`;
           const diffClass = diffVal >= 0 ? 'text-green-600' : 'text-red-600';
-          const geptomicCell = buildGeptomicCell(r, i + 1);
+          const rowKey = getRowKey(r, mode);
+          const prevPosOverride = prevPositionMap ? prevPositionMap.get(rowKey) : null;
+          const geptomicCell = buildGeptomicCell(r, i + 1, prevPosOverride);
           if(mode==='ind'){
             tbody.appendChild(T(
               `<tr class="border-t border-neutral-100 row">
