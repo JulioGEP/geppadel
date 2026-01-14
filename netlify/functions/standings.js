@@ -200,14 +200,18 @@ export default async (req) => {
 
   const prevIndPositions = new Map(previousStandings.individual.map((row, idx) => [row.id, idx + 1]));
   const prevPairPositions = new Map(previousStandings.parejas.map((row, idx) => [row.key, idx + 1]));
+  const prevIndGeptomic = new Map(previousStandings.individual.map(row => [row.id, row.geptomic]));
+  const prevPairGeptomic = new Map(previousStandings.parejas.map(row => [row.key, row.geptomic]));
 
   const individual = currentStandings.individual.map((row, idx) => ({
     ...row,
-    prev_position: prevIndPositions.get(row.id) ?? idx + 1
+    prev_position: prevIndPositions.get(row.id) ?? idx + 1,
+    prev_geptomic: prevIndGeptomic.get(row.id) ?? 0
   }));
   const parejas = currentStandings.parejas.map((row, idx) => ({
     ...row,
-    prev_position: prevPairPositions.get(row.key) ?? idx + 1
+    prev_position: prevPairPositions.get(row.key) ?? idx + 1,
+    prev_geptomic: prevPairGeptomic.get(row.key) ?? 0
   }));
 
   return json(req, { individual, parejas });

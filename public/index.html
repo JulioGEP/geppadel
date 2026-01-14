@@ -362,6 +362,7 @@
       };
       const buildGeptomicCell = (row, currentPos) => {
         const prevPos = row.prev_position ?? currentPos;
+        const prevGeptomic = row.prev_geptomic ?? 0;
         let icon = '=';
         let color = 'text-orange-500';
         if (prevPos > currentPos) {
@@ -376,7 +377,7 @@
             <div>${row.geptomic}</div>
             <div class="flex items-center gap-1 text-xs ${color}">
               <span>${icon}</span>
-              <span class="text-[0.7rem]">${prevPos}</span>
+              <span class="text-[0.7rem]">${prevGeptomic}</span>
             </div>
           </div>`;
       };
