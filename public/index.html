@@ -660,7 +660,7 @@
 
       // -------- Histórico de partidos --------
       root.appendChild(T(`<h3 class="text-lg font-semibold mt-6 mb-2">Histórico de partidos</h3>`));
-      const listWrap=T(`<div class="grid gap-3" id="matchesList"></div>`);
+      const listWrap=T(`<div class="grid gap-6" id="matchesList"></div>`);
       root.appendChild(listWrap);
 
       const P = id => players.find(p=>p.id===id);
@@ -682,9 +682,35 @@
         el.oninput=mark; mark(); return el;
       };
 
-      const list=listWrap;
-      if(matches.length===0) list.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
-      matches.forEach(m=>{
+      const formatMonthLabel = (date) => {
+        if (!date) return 'Sin fecha';
+        const month = date.toLocaleDateString('es-ES', { month:'long' });
+        return month.charAt(0).toUpperCase() + month.slice(1);
+      };
+
+      const getGroupInfo = (match) => {
+        const rawDate = match?.date_iso ? new Date(match.date_iso) : null;
+        if (!rawDate || Number.isNaN(rawDate.getTime())) {
+          return {
+            yearKey: 'sin-fecha',
+            yearLabel: 'Sin fecha',
+            monthKey: 'sin-fecha',
+            monthLabel: 'Sin fecha',
+            sortValue: 0,
+          };
+        }
+        const year = String(rawDate.getFullYear());
+        const monthKey = `${year}-${String(rawDate.getMonth() + 1).padStart(2, '0')}`;
+        return {
+          yearKey: year,
+          yearLabel: year,
+          monthKey,
+          monthLabel: formatMonthLabel(rawDate),
+          sortValue: rawDate.getTime(),
+        };
+      };
+
+      const renderMatchCard = (m) => {
         const a1=P(m.a1), a2=P(m.a2), b1=P(m.b1), b2=P(m.b2);
         const participants = [a1, a2, b1, b2].filter(Boolean);
         const isPast = isPastMatch(m.date_iso);
@@ -889,8 +915,86 @@
           await init();
         });
 
-        list.appendChild(card);
-      });
+        return card;
+      };
+
+      if(matches.length===0){
+        listWrap.appendChild(T(`<div class="text-neutral-500">No hay partidos aún.</div>`));
+      } else {
+        const pendingMatches = matches.filter(m=>!m.finalizado);
+        const finishedMatches = matches.filter(m=>m.finalizado);
+
+        const pendingSection = T(`<div class="grid gap-3"></div>`);
+        pendingSection.appendChild(T(`<h4 class="text-base font-semibold">Partidos pendientes</h4>`));
+        if(pendingMatches.length===0){
+          pendingSection.appendChild(T(`<div class="text-neutral-500">No hay partidos pendientes.</div>`));
+        } else {
+          pendingMatches.forEach(m=>pendingSection.appendChild(renderMatchCard(m)));
+        }
+        listWrap.appendChild(pendingSection);
+
+        const finishedSection = T(`<div class="grid gap-3"></div>`);
+        finishedSection.appendChild(T(`<h4 class="text-base font-semibold">Partidos cerrados</h4>`));
+        if(finishedMatches.length===0){
+          finishedSection.appendChild(T(`<div class="text-neutral-500">Aún no hay partidos cerrados.</div>`));
+        } else {
+          const sortedFinished = [...finishedMatches].sort((a, b) => {
+            const infoA = getGroupInfo(a);
+            const infoB = getGroupInfo(b);
+            return infoB.sortValue - infoA.sortValue;
+          });
+
+          const grouped = new Map();
+          const yearOrder = [];
+          sortedFinished.forEach((match) => {
+            const info = getGroupInfo(match);
+            if (!grouped.has(info.yearKey)) {
+              grouped.set(info.yearKey, { label: info.yearLabel, months: new Map(), monthOrder: [] });
+              yearOrder.push(info.yearKey);
+            }
+            const yearGroup = grouped.get(info.yearKey);
+            if (!yearGroup.months.has(info.monthKey)) {
+              yearGroup.months.set(info.monthKey, { label: info.monthLabel, matches: [] });
+              yearGroup.monthOrder.push(info.monthKey);
+            }
+            yearGroup.months.get(info.monthKey).matches.push(match);
+          });
+
+          yearOrder.forEach((yearKey) => {
+            const yearGroup = grouped.get(yearKey);
+            const totalMatches = yearGroup.monthOrder.reduce((sum, monthKey) => {
+              return sum + yearGroup.months.get(monthKey).matches.length;
+            }, 0);
+            const yearDetails = T(`
+              <details class="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+                <summary class="cursor-pointer select-none px-4 py-3 flex items-center justify-between">
+                  <span class="font-semibold">${yearGroup.label}</span>
+                  <span class="text-sm text-neutral-500">${totalMatches} partido${totalMatches===1?'':'s'}</span>
+                </summary>
+                <div class="px-4 pb-4 grid gap-3"></div>
+              </details>
+            `);
+            const yearBody = yearDetails.querySelector('div');
+            yearGroup.monthOrder.forEach((monthKey) => {
+              const monthGroup = yearGroup.months.get(monthKey);
+              const monthDetails = T(`
+                <details class="rounded-xl border border-neutral-200 bg-neutral-50 overflow-hidden">
+                  <summary class="cursor-pointer select-none px-4 py-3 flex items-center justify-between">
+                    <span class="font-medium">${monthGroup.label}</span>
+                    <span class="text-sm text-neutral-500">${monthGroup.matches.length} partido${monthGroup.matches.length===1?'':'s'}</span>
+                  </summary>
+                  <div class="px-4 pb-4 grid gap-3"></div>
+                </details>
+              `);
+              const monthBody = monthDetails.querySelector('div');
+              monthGroup.matches.forEach(match => monthBody.appendChild(renderMatchCard(match)));
+              yearBody.appendChild(monthDetails);
+            });
+            finishedSection.appendChild(yearDetails);
+          });
+        }
+        listWrap.appendChild(finishedSection);
+      }
 
       // ------ Gestión de jugadores ------
       const secP=T(`<section class="mt-6 grid gap-4">
