@@ -28,6 +28,17 @@ const matchPoints = (sa, sb) => {
   return [0, 0];
 };
 
+const EXCLUDED_MATCH_TIMESTAMPS = new Set([
+  Date.parse('2026-03-04T13:30:00Z')
+]);
+
+const shouldCountMatch = (match) => {
+  if (!match?.date_iso) return true;
+  const matchTime = new Date(match.date_iso).getTime();
+  if (Number.isNaN(matchTime)) return true;
+  return !EXCLUDED_MATCH_TIMESTAMPS.has(matchTime);
+};
+
 export default async (req) => {
   const p = preflight(req); if (p) return p;
 
@@ -192,7 +203,7 @@ export default async (req) => {
     return { individual, parejas };
   };
 
-  const orderedMatches = sortMatches(matches);
+  const orderedMatches = sortMatches(matches.filter(shouldCountMatch));
   const previousMatches = orderedMatches.length > 0 ? orderedMatches.slice(0, -1) : [];
 
   const currentStandings = computeStandings(orderedMatches);
