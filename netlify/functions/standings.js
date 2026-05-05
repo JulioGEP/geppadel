@@ -32,6 +32,34 @@ const EXCLUDED_MATCH_TIMESTAMPS = new Set([
   Date.parse('2026-03-04T13:30:00Z')
 ]);
 
+// Partidos a partir de esta fecha usan la fórmula GEPTomic v2
+const GEPTOMIC_V2_DATE = Date.parse('2026-05-05T00:00:00Z');
+
+// Factor K adaptativo: amplifica sorpresas, amortigua resultados esperados.
+// Multiplica el delta ELO base según margen de juegos y diferencia de GEP.
+// K=1 cuando no hay datos de juegos (degradación a fórmula original).
+const kFactor = (ratingA, ratingB, ga, gb, sa, sb, aWins) => {
+  const MAX_JUEGOS    = 12; // diferencia máxima real en padel (6-0, 6-0)
+  const MAX_DELTA_GEP = 2;  // diferencia máxima razonable entre promedios de pareja
+  const ALPHA = 0.5;        // amplificador para sorpresas
+  const BETA  = 0.4;        // amortiguador para resultados esperados
+
+  const loserSets = aWins ? sb : sa;
+  const F_sets    = loserSets === 0 ? 1.0 : 0.8; // 2-0 más decisivo que 2-1
+
+  const diff_juegos = Math.abs(ga - gb);
+  const margin      = Math.min(diff_juegos / MAX_JUEGOS, 1.0) * F_sets;
+
+  const gepWinner     = aWins ? ratingA : ratingB;
+  const gepLoser      = aWins ? ratingB : ratingA;
+  const was_upset     = gepWinner < gepLoser;
+  const delta_gep_norm = Math.min(Math.abs(gepWinner - gepLoser) / MAX_DELTA_GEP, 1.0);
+
+  return was_upset
+    ? 1 + ALPHA * margin * delta_gep_norm
+    : 1 - BETA  * margin * delta_gep_norm;
+};
+
 const shouldCountMatch = (match) => {
   if (!match?.date_iso) return true;
   const matchTime = new Date(match.date_iso).getTime();
@@ -120,8 +148,10 @@ export default async (req) => {
         const expB = 1 - expA;
         const scoreA = aWins ? 1 : 0;
         const scoreB = 1 - scoreA;
-        A.forEach(id=>{ ind.get(id).geptomic += (scoreA - expA); });
-        B.forEach(id=>{ ind.get(id).geptomic += (scoreB - expB); });
+        const useV2 = m.date_iso && Date.parse(m.date_iso) >= GEPTOMIC_V2_DATE;
+        const K = useV2 ? kFactor(ratingA, ratingB, ga, gb, sa, sb, aWins) : 1;
+        A.forEach(id=>{ ind.get(id).geptomic += K * (scoreA - expA); });
+        B.forEach(id=>{ ind.get(id).geptomic += K * (scoreB - expB); });
       }
 
       // Elo rating update for pairs
@@ -132,8 +162,10 @@ export default async (req) => {
         const expB = 1 - expA;
         const scoreA = aWins ? 1 : 0;
         const scoreB = 1 - scoreA;
-        pairA.geptomic += (scoreA - expA);
-        pairB.geptomic += (scoreB - expB);
+        const useV2 = m.date_iso && Date.parse(m.date_iso) >= GEPTOMIC_V2_DATE;
+        const K = useV2 ? kFactor(ratingA, ratingB, ga, gb, sa, sb, aWins) : 1;
+        pairA.geptomic += K * (scoreA - expA);
+        pairB.geptomic += K * (scoreB - expB);
       }
 
       // PJ
